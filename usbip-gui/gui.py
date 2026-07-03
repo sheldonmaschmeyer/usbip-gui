@@ -276,7 +276,7 @@ def parse_attached_list(text: str) -> List[Tuple[str, int, str, str, str]]:
 def list_local_usb() -> List[Tuple[str, str, str]]:
     """Execute usbip to list local devices and return parsed rows."""
     result = subprocess.run(
-        ["usbip", "list", "--local"],
+        ["sudo", "usbip", "list", "--local"],
         capture_output=True,
         text=True,
         check=False,
@@ -287,7 +287,7 @@ def list_local_usb() -> List[Tuple[str, str, str]]:
 def list_remote_usb(server_ip: str) -> List[Tuple[str, str, str]]:
     """Execute usbip to list exportable devices on a remote server."""
     result = subprocess.run(
-        ["usbip", "list", "--remote=" + server_ip],
+        ["sudo", "usbip", "list", "--remote=" + server_ip],
         capture_output=True,
         text=True,
         check=False,
@@ -298,7 +298,7 @@ def list_remote_usb(server_ip: str) -> List[Tuple[str, str, str]]:
 def bind_local_usb(bus_id: str):
     """Execute usbip to bind a local device by bus ID."""
     result = subprocess.run(
-        ["usbip", "bind", "--busid=" + bus_id],
+        ["sudo", "usbip", "bind", "--busid=" + bus_id],
         capture_output=True,
         text=True,
         check=False,
@@ -311,7 +311,7 @@ def bind_local_usb(bus_id: str):
 def unbind_local_usb(bus_id: str):
     """Execute usbip to unbind a local device by bus ID."""
     result = subprocess.run(
-        ["usbip", "unbind", "--busid=" + bus_id],
+        ["sudo", "usbip", "unbind", "--busid=" + bus_id],
         capture_output=True,
         text=True,
         check=False,
@@ -324,7 +324,7 @@ def unbind_local_usb(bus_id: str):
 def list_attached_usb() -> List[Tuple[str, int, str, str, str]]:
     """Execute usbip to list currently attached remote devices."""
     result = subprocess.run(
-        ["usbip", "port"], capture_output=True, text=True, check=False
+        ["sudo", "usbip", "port"], capture_output=True, text=True, check=False
     )
     print(result.stdout)
     print(result.stderr)
@@ -334,7 +334,7 @@ def list_attached_usb() -> List[Tuple[str, int, str, str, str]]:
 def attach_remote_usb(server_ip: str, bus_id: str):
     """Execute usbip to attach a remote device by bus ID."""
     result = subprocess.run(
-        ["usbip", "attach", "--remote=" + server_ip, "--busid=" + bus_id],
+        ["sudo", "usbip", "attach", "--remote=" + server_ip, "--busid=" + bus_id],
         capture_output=True,
         text=True,
         check=False,
@@ -347,7 +347,7 @@ def attach_remote_usb(server_ip: str, bus_id: str):
 def detach_remote_usb(port: int):
     """Execute usbip to detach an imported device by port."""
     result = subprocess.run(
-        ["usbip", "detach", "--port=" + str(port)],
+        ["sudo", "usbip", "detach", "--port=" + str(port)],
         capture_output=True,
         text=True,
         check=False,
