@@ -1,0 +1,25 @@
+services:
+  usbip-gui:
+    build:
+      context: .
+      dockerfile: usbip-gui.dockerfile
+    container_name: usbip-gui-dev
+    # Pass through the host's DISPLAY environment variable for the GUI
+    environment:
+      - DISPLAY=${DISPLAY}
+    volumes:
+      # Mount the current directory into the container for live coding
+      - .:/app
+      # Mount the X11 socket to allow the GUI to render on the host
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      # Mount USB devices so that usbip can see and bind them
+      - /dev/bus/usb:/dev/bus/usb
+      # Mount kernel modules (read-only) because the script uses 'modprobe'
+      - /lib/modules:/lib/modules:ro
+    # Privileged is necessary to load kernel modules and interact with USB devices directly
+    privileged: true
+    # Host networking allows easier communication with remote devices
+    network_mode: host
+    # Keep the container running interactively
+    stdin_open: true
+    tty: true
