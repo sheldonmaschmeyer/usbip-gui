@@ -1,0 +1,23 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+    "python.analysis.extraPaths": ["./usbip-gui"],
+    "pylint.args": [
+        "--init-hook=import sys; sys.path.append('./usbip-gui')"
+    ],
+    "cSpell.words": [
+			"busid",
+			"businfo",
+			"Mbps",
+			"padx",
+			"pady",
+			"usbip",
+			"usbipd",
+			"vhci"
+		]
+	}
+}
