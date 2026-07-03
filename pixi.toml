@@ -1,0 +1,17 @@
+[workspace]
+name = "usbip-gui"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[dependencies]
+python = ">=3.10"
+flake8 = "*"
+black = "*"
+pylint = "*"
+pytest = "*"
+
+[tasks]
+usbip = "python3 usbip-gui/main.py"
+lint = "flake8 . && pylint ."
+format = "black ."
+test = "pytest"
