@@ -23,6 +23,7 @@ RUN apt-get update && apt-get install -y \
     udev \
     locales \
     gettext \
+    fonts-ubuntu \
     && rm -rf /var/lib/apt/lists/*
 
 # Set locale for zsh agnoster theme characters
