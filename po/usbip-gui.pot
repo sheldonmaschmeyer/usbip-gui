@@ -1,6 +1,7 @@
 # Translation template for usbip-gui.
 # This file is distributed under the same license as the usbip-gui package.
-# K-Francis-H
+# Original: K-Francis-H
+# Maintainer: Sheldon M.
 #
 #, fuzzy
 msgid ""

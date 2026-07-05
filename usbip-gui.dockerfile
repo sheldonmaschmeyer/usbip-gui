@@ -22,6 +22,7 @@ RUN apt-get update && apt-get install -y \
     kmod \
     udev \
     locales \
+    gettext \
     && rm -rf /var/lib/apt/lists/*
 
 # Set locale for zsh agnoster theme characters

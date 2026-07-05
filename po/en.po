@@ -1,6 +1,7 @@
 # English translation for usbip-gui.
 # This file is distributed under the same license as the PACKAGE package.
 # Original Author: K-Francis-H.
+# Maintainer: Sheldon M.
 #
 #, fuzzy
 msgid ""

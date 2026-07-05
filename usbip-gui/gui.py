@@ -15,8 +15,15 @@ from gettext import textdomain, bindtextdomain, gettext as _
 
 APP_DOMAIN = "usbip-gui"
 
+import os
+from pathlib import Path
+
 textdomain(APP_DOMAIN)
-bindtextdomain(APP_DOMAIN, localedir="/usr/local/share/locale/")
+_local_localedir = Path(__file__).parent.parent / "share" / "locale"
+if _local_localedir.exists():
+    bindtextdomain(APP_DOMAIN, localedir=str(_local_localedir))
+else:
+    bindtextdomain(APP_DOMAIN, localedir="/usr/local/share/locale/")
 
 DEVICE_COLUMNS = [_("bus_id"), _("manufacturer"), _("description")]
 DEVICE_COLUMN_WIDTHS = [8, 20, 50]
@@ -282,10 +289,16 @@ class UsbIpGui:
         for device in remote_devices:
             self.remote_listbox.insert("", "end", values=device)
 
+        self.lang_button = Button(
+            self.remote_control_frame, text="EN / FR", command=self.toggle_language
+        )
+
         self.remote_list_label.grid(column=0, row=0, padx=10)
         self.remote_ip_input.grid(column=1, row=0, padx=10)
         self.remote_list_refresh_button.grid(column=2, row=0, padx=10)
         self.remote_list_attach_button.grid(column=3, row=0, padx=10)
+        self.remote_control_frame.columnconfigure(4, weight=1)
+        self.lang_button.grid(column=4, row=0, padx=10, sticky="e")
 
         self.remote_control_frame.grid(column=0, row=0, sticky="ew", pady=10)
         self.remote_listbox.grid(column=0, row=1, sticky="ew", pady=10)
@@ -453,10 +466,28 @@ class UsbIpGui:
         self.refresh_local()
         self.refresh_attached()
 
+    def toggle_language(self):
+        """Toggle the interface language between English and French Canadian and restart."""
+        import os
+        import sys
+        current_lang = os.environ.get("LANGUAGE", "en")
+        new_lang = "fr_CA" if current_lang != "fr_CA" else "en"
+        os.environ["LANGUAGE"] = new_lang
+        os.execv(sys.executable, [sys.executable] + sys.argv)
+
 
 def start_app():
     """Initialize and launch the main Tkinter GUI application."""
     import os
+    
+    root = Tk()
+    root.wm_title(_("USB/IP Peer"))
+    root.geometry("1002x842")
+    
+    loading_label = Label(root, text="Loading / Chargement...", font=("Arial", 24))
+    loading_label.pack(expand=True)
+    root.update()
+
     script_path = os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
         "setup_usbip.sh"
@@ -464,6 +495,6 @@ def start_app():
     if os.path.exists(script_path):
         subprocess.run(["bash", script_path], check=False)
 
-    root = Tk()
+    loading_label.destroy()
     UsbIpGui(root)
     root.mainloop()
