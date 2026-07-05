@@ -17,7 +17,7 @@ services:
       # Mount kernel modules (read-only) because the script uses 'modprobe'
       - /lib/modules:/lib/modules:ro
       # Mount the user's zsh history for convenience
-      - '.zsh_history:/home/node/.zsh_history'
+      - '.zsh_history:/home/ubuntu/.zsh_history'
     # Privileged is necessary to load kernel modules and interact with USB devices directly
     privileged: true
     # Host networking allows easier communication with remote devices
