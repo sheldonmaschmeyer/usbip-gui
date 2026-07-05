@@ -31,12 +31,6 @@ ATTACHED_COLUMN_WIDTHS = [21, 3, 8, 20, 50]
 USBIPD_PORT = 3240
 
 
-local_listbox: Treeview
-remote_listbox: Treeview
-attached_listbox: Treeview
-remote_ip_input: Entry
-
-
 def init_kernel_modules():
     """Load the required kernel modules for USB/IP."""
     subprocess.run(["sudo", "modprobe", "usbip_host"], check=False)
@@ -56,111 +50,6 @@ def scan():
     return 0
 
 
-def refresh_local():
-    """Refresh the local devices listbox with available USB devices."""
-    local_devices = list_local_usb()
-    local_listbox.delete(*local_listbox.get_children())
-    for device in local_devices:
-        local_listbox.insert("", "end", values=device)
-
-
-def refresh_remote():
-    """Refresh the remote devices listbox by querying the given server IP."""
-    server_ip = remote_ip_input.get()
-    remote_devices = list_remote_usb(server_ip)
-    remote_listbox.delete(*remote_listbox.get_children())
-    for device in remote_devices:
-        remote_listbox.insert("", "end", values=device)
-
-
-def refresh_attached():
-    """
-    Refresh the attached devices listbox with currently imported USB devices.
-    """
-    attached_devices = list_attached_usb()
-    attached_listbox.delete(*attached_listbox.get_children())
-    for device in attached_devices:
-        attached_listbox.insert("", "end", values=device)
-
-
-# TODO these are both wrong
-def bind_local():
-    """Bind the selected local USB device to make it exportable."""
-    selection = local_listbox.selection()
-    if not selection:
-        print(_("no selection to bind"))
-        messagebox.showerror(_("Error"), _("no selection to bind"))
-        return
-
-    bus_id = local_listbox.item(selection[0])["values"][0]
-
-    result = bind_local_usb(bus_id)
-    if result.returncode == 0:
-        print(bus_id + _(" bound successfully"))
-
-
-def unbind_local():
-    """Unbind the selected local USB device."""
-    selection = local_listbox.selection()
-    if not selection:
-        print(_("no selection to unbind"))
-        messagebox.showerror(_("Error"), _("no selection to unbind"))
-        return
-
-    bus_id = local_listbox.item(selection[0])["values"][0]
-
-    result = unbind_local_usb(bus_id)
-    if result.returncode == 0:
-        print(bus_id + _(" unbound successfully"))
-
-
-def attach_remote():
-    """Attach the selected remote USB device to the local machine."""
-    server_ip = remote_ip_input.get()
-    selection = remote_listbox.selection()
-    if not selection:
-        print(_("no selection to attach"))
-        messagebox.showerror(_("Error"), _("no selection to attach"))
-        return
-    print(server_ip)
-    print(selection[0])
-    print(selection)
-    print(remote_listbox.item(selection[0]))
-    bus_id = remote_listbox.item(selection[0])["values"][0]
-    print(bus_id)
-    result = attach_remote_usb(server_ip, bus_id)
-    print(result.returncode)
-    # if result.returncode == 0:
-    #     attached_devices[bus_id] = {
-    #         'bus_id' : bus_id,
-    #         'port' : len(attached_devices),
-    #         'manufacturer' : manufacturer,
-    #         'description' : description
-    #     }
-    # print(attached_devices)
-    time.sleep(0.5)
-    refresh_remote()
-    refresh_local()
-    refresh_attached()
-
-
-# TODO get selection
-def detach_remote():
-    """Detach the selected imported USB device from the local machine."""
-    selection = attached_listbox.selection()
-    if not selection:
-        print(_("no selection to detach"))
-        messagebox.showerror(_("Error"), _("no selection to detach"))
-        return  # no selected item
-    print(selection)
-    port = int(attached_listbox.item(selection[0])["values"][1])
-
-    detach_remote_usb(port)
-
-    time.sleep(0.5)
-    refresh_remote()
-    refresh_local()
-    refresh_attached()
 
 
 # sample output to parse for parse_local_list(text)
@@ -334,7 +223,13 @@ def list_attached_usb() -> List[Tuple[str, int, str, str, str]]:
 def attach_remote_usb(server_ip: str, bus_id: str):
     """Execute usbip to attach a remote device by bus ID."""
     result = subprocess.run(
-        ["sudo", "usbip", "attach", "--remote=" + server_ip, "--busid=" + bus_id],
+        [
+            "sudo",
+            "usbip",
+            "attach",
+            "--remote=" + server_ip,
+            "--busid=" + bus_id,
+        ],
         capture_output=True,
         text=True,
         check=False,
@@ -359,113 +254,216 @@ def detach_remote_usb(port: int):
 # def update_list(list, values):
 
 
-# class UsbIpGui():
+class UsbIpGui:
+    def __init__(self, root: Tk):
+        self.root = root
+        self.root.wm_title(_("USB/IP Peer"))
+        self.root.geometry("1002x842")
 
-# 	def __init__(self):
+        # Remote devices
+        self.remote_control_frame = Frame(self.root)
+        self.remote_list_label = Label(
+            self.remote_control_frame,
+            text=_("Remote USB Devices for "),
+        )
+        self.remote_ip_input = Entry(self.remote_control_frame)
+        self.remote_list_refresh_button = Button(
+            self.remote_control_frame, text=_("Refresh"), command=self.refresh_remote
+        )
+        self.remote_list_attach_button = Button(
+            self.remote_control_frame, text=_("Attach Device"), command=self.attach_remote
+        )
+        self.remote_listbox = Treeview(self.root, columns=DEVICE_COLUMNS, show="headings")
+
+        for col in DEVICE_COLUMNS:
+            self.remote_listbox.heading(col, text=col.title())
+        
+        remote_devices = list_remote_usb("127.0.0.1")
+        for device in remote_devices:
+            self.remote_listbox.insert("", "end", values=device)
+
+        self.remote_list_label.grid(column=0, row=0, padx=10)
+        self.remote_ip_input.grid(column=1, row=0, padx=10)
+        self.remote_list_refresh_button.grid(column=2, row=0, padx=10)
+        self.remote_list_attach_button.grid(column=3, row=0, padx=10)
+
+        self.remote_control_frame.grid(column=0, row=0, sticky="ew", pady=10)
+        self.remote_listbox.grid(column=0, row=1, sticky="ew", pady=10)
+
+        # Local devices
+        self.local_control_frame = Frame(self.root)
+        self.local_list_label = Label(self.local_control_frame, text=_("Local USB Devices"))
+        self.local_list_refresh_button = Button(
+            self.local_control_frame, text=_("Refresh"), command=self.refresh_local
+        )
+        self.local_list_bind_button = Button(
+            self.local_control_frame, text=_("Bind Device"), command=self.bind_local
+        )
+        self.local_list_unbind_button = Button(
+            self.local_control_frame, text=_("Unbind Device"), command=self.unbind_local
+        )
+        self.local_listbox = Treeview(self.root, columns=DEVICE_COLUMNS, show="headings")
+
+        for col in DEVICE_COLUMNS:
+            self.local_listbox.heading(col, text=col.title())
+
+        local_devices = list_local_usb()
+        for device in local_devices:
+            self.local_listbox.insert("", "end", values=device)
+
+        self.local_list_label.grid(column=0, row=0, padx=10)
+        self.local_list_refresh_button.grid(column=1, row=0, padx=10)
+        self.local_list_bind_button.grid(column=3, row=0, padx=10)
+        self.local_list_unbind_button.grid(column=4, row=0, padx=10)
+
+        self.local_control_frame.grid(column=0, row=2, sticky="ew", pady=10)
+        self.local_listbox.grid(column=0, row=3, sticky="ew", pady=10)
+
+        # Attached devices
+        self.attached_control_frame = Frame(self.root)
+        self.attached_list_label = Label(
+            self.attached_control_frame, text=_("Attached Devices")
+        )
+        self.attached_list_refresh_button = Button(
+            self.attached_control_frame, text=_("Refresh"), command=self.refresh_attached
+        )
+        self.detach_button = Button(
+            self.attached_control_frame, text=_("Detach Device"), command=self.detach_remote
+        )
+        self.attached_listbox = Treeview(self.root, columns=ATTACHED_COLUMNS, show="headings")
+
+        for col in ATTACHED_COLUMNS:
+            self.attached_listbox.heading(col, text=col.title())
+
+        attached_devices = list_attached_usb()
+        for device in attached_devices:
+            self.attached_listbox.insert("", "end", values=device)
+
+        self.attached_list_label.grid(column=0, row=0, padx=10)
+        self.attached_list_refresh_button.grid(column=1, row=0, padx=10)
+        self.detach_button.grid(column=2, row=0, padx=10)
+
+        self.attached_control_frame.grid(column=0, row=4, sticky="ew", pady=10)
+        self.attached_listbox.grid(column=0, row=5, sticky="ew", pady=10)
+
+
+    def refresh_local(self):
+        """Refresh the local devices listbox with available USB devices."""
+        local_devices = list_local_usb()
+        self.local_listbox.delete(*self.local_listbox.get_children())
+        for device in local_devices:
+            self.local_listbox.insert("", "end", values=device)
+
+
+    def refresh_remote(self):
+        """Refresh the remote devices listbox by querying the given server IP."""
+        server_ip = self.remote_ip_input.get()
+        remote_devices = list_remote_usb(server_ip)
+        self.remote_listbox.delete(*self.remote_listbox.get_children())
+        for device in remote_devices:
+            self.remote_listbox.insert("", "end", values=device)
+
+
+    def refresh_attached(self):
+        """
+        Refresh the attached devices listbox with currently imported USB devices.
+        """
+        attached_devices = list_attached_usb()
+        self.attached_listbox.delete(*self.attached_listbox.get_children())
+        for device in attached_devices:
+            self.attached_listbox.insert("", "end", values=device)
+
+
+    # TODO these are both wrong
+    def bind_local(self):
+        """Bind the selected local USB device to make it exportable."""
+        selection = self.local_listbox.selection()
+        if not selection:
+            print(_("no selection to bind"))
+            messagebox.showerror(_("Error"), _("no selection to bind"))
+            return
+
+        bus_id = self.local_listbox.item(selection[0])["values"][0]
+
+        result = bind_local_usb(bus_id)
+        if result.returncode == 0:
+            print(bus_id + _(" bound successfully"))
+
+
+    def unbind_local(self):
+        """Unbind the selected local USB device."""
+        selection = self.local_listbox.selection()
+        if not selection:
+            print(_("no selection to unbind"))
+            messagebox.showerror(_("Error"), _("no selection to unbind"))
+            return
+
+        bus_id = self.local_listbox.item(selection[0])["values"][0]
+
+        result = unbind_local_usb(bus_id)
+        if result.returncode == 0:
+            print(bus_id + _(" unbound successfully"))
+
+
+    def attach_remote(self):
+        """Attach the selected remote USB device to the local machine."""
+        server_ip = self.remote_ip_input.get()
+        selection = self.remote_listbox.selection()
+        if not selection:
+            print(_("no selection to attach"))
+            messagebox.showerror(_("Error"), _("no selection to attach"))
+            return
+        print(server_ip)
+        print(selection[0])
+        print(selection)
+        print(self.remote_listbox.item(selection[0]))
+        bus_id = self.remote_listbox.item(selection[0])["values"][0]
+        print(bus_id)
+        result = attach_remote_usb(server_ip, bus_id)
+        print(result.returncode)
+        # if result.returncode == 0:
+        #     attached_devices[bus_id] = {
+        #         'bus_id' : bus_id,
+        #         'port' : len(attached_devices),
+        #         'manufacturer' : manufacturer,
+        #         'description' : description
+        #     }
+        # print(attached_devices)
+        time.sleep(0.5)
+        self.refresh_remote()
+        self.refresh_local()
+        self.refresh_attached()
+
+
+    # TODO get selection
+    def detach_remote(self):
+        """Detach the selected imported USB device from the local machine."""
+        selection = self.attached_listbox.selection()
+        if not selection:
+            print(_("no selection to detach"))
+            messagebox.showerror(_("Error"), _("no selection to detach"))
+            return  # no selected item
+        print(selection)
+        port = int(self.attached_listbox.item(selection[0])["values"][1])
+
+        detach_remote_usb(port)
+
+        time.sleep(0.5)
+        self.refresh_remote()
+        self.refresh_local()
+        self.refresh_attached()
 
 
 def start_app():
     """Initialize and launch the main Tkinter GUI application."""
-    # pylint: disable=global-statement
-    # see TODO: shift up into classes & functions
-    global local_listbox, remote_listbox, attached_listbox, remote_ip_input
+    import os
+    script_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "setup_usbip.sh"
+    )
+    if os.path.exists(script_path):
+        subprocess.run(["bash", script_path], check=False)
 
     root = Tk()
-    root.wm_title(_("USB/IP Peer"))
-    root.geometry("1002x842")
-
-    # TODO listbox for remote (from entered IP) usb items
-    remote_control_frame = Frame(root)
-    remote_list_label = Label(
-        remote_control_frame,
-        text=_("Remote USB Devices for "),
-    )
-    remote_ip_input = Entry(remote_control_frame)
-    remote_list_refresh_button = Button(
-        remote_control_frame, text=_("Refresh"), command=refresh_remote
-    )
-    remote_list_attach_button = Button(
-        remote_control_frame, text=_("Attach Device"), command=attach_remote
-    )
-    # Listbox(root)
-    remote_listbox = Treeview(columns=DEVICE_COLUMNS, show="headings")
-    # remote_listbox.pack(side="left")
-
-    for col in DEVICE_COLUMNS:
-        remote_listbox.heading(col, text=col.title())
-    # '192.168.1.103'
-    remote_devices = list_remote_usb("127.0.0.1")
-    for device in remote_devices:
-        remote_listbox.insert("", "end", values=device)
-
-    remote_list_label.grid(column=0, row=0, padx=10)
-    remote_ip_input.grid(column=1, row=0, padx=10)
-    remote_list_refresh_button.grid(column=2, row=0, padx=10)
-    remote_list_attach_button.grid(column=3, row=0, padx=10)
-
-    remote_control_frame.grid(column=0, row=0, sticky="ew", pady=10)
-    remote_listbox.grid(column=0, row=1, sticky="ew", pady=10)
-
-    # TODO listbox for local items
-
-    local_control_frame = Frame(root)
-    local_list_label = Label(local_control_frame, text=_("Local USB Devices"))
-    local_list_refresh_button = Button(
-        local_control_frame, text=_("Refresh"), command=refresh_local
-    )
-    local_list_bind_button = Button(
-        local_control_frame, text=_("Bind Device"), command=bind_local
-    )
-    local_list_unbind_button = Button(
-        local_control_frame, text=_("Unbind Device"), command=unbind_local
-    )
-    # Listbox(root)
-    local_listbox = Treeview(columns=DEVICE_COLUMNS, show="headings")
-
-    # local_listbox.pack(side="right")
-
-    # setup column names
-    for col in DEVICE_COLUMNS:
-        local_listbox.heading(col, text=col.title())
-        # local_listbox.column(col, width=tkFont)
-
-    local_devices = list_local_usb()
-    for device in local_devices:
-        local_listbox.insert("", "end", values=device)
-
-    local_list_label.grid(column=0, row=0, padx=10)
-    local_list_refresh_button.grid(column=1, row=0, padx=10)
-    local_list_bind_button.grid(column=3, row=0, padx=10)
-    local_list_unbind_button.grid(column=4, row=0, padx=10)
-
-    local_control_frame.grid(column=0, row=2, sticky="ew", pady=10)
-    local_listbox.grid(column=0, row=3, sticky="ew", pady=10)
-
-    attached_control_frame = Frame(root)
-    attached_list_label = Label(
-        attached_control_frame, text=_("Attached Devices")
-    )
-    attached_list_refresh_button = Button(
-        attached_control_frame, text=_("Refresh"), command=refresh_attached
-    )
-    detach_button = Button(
-        attached_control_frame, text=_("Detach Device"), command=detach_remote
-    )
-    attached_listbox = Treeview(columns=ATTACHED_COLUMNS, show="headings")
-
-    for col in ATTACHED_COLUMNS:
-        attached_listbox.heading(col, text=col.title())
-
-    attached_devices = list_attached_usb()
-    for device in attached_devices:
-        attached_listbox.insert("", "end", values=device)
-
-    attached_list_label.grid(column=0, row=0, padx=10)
-    attached_list_refresh_button.grid(column=1, row=0, padx=10)
-    detach_button.grid(column=2, row=0, padx=10)
-
-    attached_control_frame.grid(column=0, row=4, sticky="ew", pady=10)
-    attached_listbox.grid(column=0, row=5, sticky="ew", pady=10)
-
-    # TODO package shit up into classes and functions
+    UsbIpGui(root)
     root.mainloop()
