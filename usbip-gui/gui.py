@@ -267,6 +267,12 @@ class UsbIpGui:
         self.root.wm_title(_("USB/IP Peer"))
         self.root.geometry("1002x842")
 
+        # Configure grid to be responsive
+        self.root.columnconfigure(0, weight=1)
+        self.root.rowconfigure(1, weight=1)
+        self.root.rowconfigure(3, weight=1)
+        self.root.rowconfigure(5, weight=1)
+
         # Remote devices
         self.remote_control_frame = Frame(self.root)
         self.remote_list_label = Label(
@@ -280,11 +286,19 @@ class UsbIpGui:
         self.remote_list_attach_button = Button(
             self.remote_control_frame, text=_("Attach Device"), command=self.attach_remote
         )
-        self.remote_listbox = Treeview(self.root, columns=DEVICE_COLUMNS, show="headings")
+
+        self.remote_list_frame = Frame(self.root)
+        from tkinter.ttk import Scrollbar
+        self.remote_scroll = Scrollbar(self.remote_list_frame, orient="vertical")
+        self.remote_listbox = Treeview(self.remote_list_frame, columns=DEVICE_COLUMNS, show="headings", yscrollcommand=self.remote_scroll.set)
+        self.remote_scroll.config(command=self.remote_listbox.yview)
+
+        self.remote_scroll.pack(side="right", fill="y")
+        self.remote_listbox.pack(side="left", fill="both", expand=True)
 
         for col in DEVICE_COLUMNS:
             self.remote_listbox.heading(col, text=col.title())
-        
+
         remote_devices = list_remote_usb("127.0.0.1")
         for device in remote_devices:
             self.remote_listbox.insert("", "end", values=device)
@@ -300,8 +314,8 @@ class UsbIpGui:
         self.remote_control_frame.columnconfigure(4, weight=1)
         self.lang_button.grid(column=4, row=0, padx=10, sticky="e")
 
-        self.remote_control_frame.grid(column=0, row=0, sticky="ew", pady=10)
-        self.remote_listbox.grid(column=0, row=1, sticky="ew", pady=10)
+        self.remote_control_frame.grid(column=0, row=0, sticky="ew", pady=(10, 0))
+        self.remote_list_frame.grid(column=0, row=1, sticky="nsew", padx=10, pady=10)
 
         # Local devices
         self.local_control_frame = Frame(self.root)
@@ -315,7 +329,14 @@ class UsbIpGui:
         self.local_list_unbind_button = Button(
             self.local_control_frame, text=_("Unbind Device"), command=self.unbind_local
         )
-        self.local_listbox = Treeview(self.root, columns=DEVICE_COLUMNS, show="headings")
+
+        self.local_list_frame = Frame(self.root)
+        self.local_scroll = Scrollbar(self.local_list_frame, orient="vertical")
+        self.local_listbox = Treeview(self.local_list_frame, columns=DEVICE_COLUMNS, show="headings", yscrollcommand=self.local_scroll.set)
+        self.local_scroll.config(command=self.local_listbox.yview)
+
+        self.local_scroll.pack(side="right", fill="y")
+        self.local_listbox.pack(side="left", fill="both", expand=True)
 
         for col in DEVICE_COLUMNS:
             self.local_listbox.heading(col, text=col.title())
@@ -329,8 +350,8 @@ class UsbIpGui:
         self.local_list_bind_button.grid(column=3, row=0, padx=10)
         self.local_list_unbind_button.grid(column=4, row=0, padx=10)
 
-        self.local_control_frame.grid(column=0, row=2, sticky="ew", pady=10)
-        self.local_listbox.grid(column=0, row=3, sticky="ew", pady=10)
+        self.local_control_frame.grid(column=0, row=2, sticky="ew", pady=(10, 0))
+        self.local_list_frame.grid(column=0, row=3, sticky="nsew", padx=10, pady=10)
 
         # Attached devices
         self.attached_control_frame = Frame(self.root)
@@ -343,7 +364,14 @@ class UsbIpGui:
         self.detach_button = Button(
             self.attached_control_frame, text=_("Detach Device"), command=self.detach_remote
         )
-        self.attached_listbox = Treeview(self.root, columns=ATTACHED_COLUMNS, show="headings")
+
+        self.attached_list_frame = Frame(self.root)
+        self.attached_scroll = Scrollbar(self.attached_list_frame, orient="vertical")
+        self.attached_listbox = Treeview(self.attached_list_frame, columns=ATTACHED_COLUMNS, show="headings", yscrollcommand=self.attached_scroll.set)
+        self.attached_scroll.config(command=self.attached_listbox.yview)
+
+        self.attached_scroll.pack(side="right", fill="y")
+        self.attached_listbox.pack(side="left", fill="both", expand=True)
 
         for col in ATTACHED_COLUMNS:
             self.attached_listbox.heading(col, text=col.title())
@@ -356,8 +384,8 @@ class UsbIpGui:
         self.attached_list_refresh_button.grid(column=1, row=0, padx=10)
         self.detach_button.grid(column=2, row=0, padx=10)
 
-        self.attached_control_frame.grid(column=0, row=4, sticky="ew", pady=10)
-        self.attached_listbox.grid(column=0, row=5, sticky="ew", pady=10)
+        self.attached_control_frame.grid(column=0, row=4, sticky="ew", pady=(10, 0))
+        self.attached_list_frame.grid(column=0, row=5, sticky="nsew", padx=10, pady=10)
 
 
     def refresh_local(self):
@@ -479,12 +507,105 @@ class UsbIpGui:
 def start_app():
     """Initialize and launch the main Tkinter GUI application."""
     import os
-    
+    from tkinter.ttk import Style
+    import tkinter.font as tkfont
+
     root = Tk()
     root.wm_title(_("USB/IP Peer"))
     root.geometry("1002x842")
-    
-    loading_label = Label(root, text="Loading / Chargement...", font=("Arial", 24))
+
+    # Modernize UI with a better theme and fonts
+    style = Style(root)
+    if 'clam' in style.theme_names():
+        style.theme_use('clam')
+
+    # Modern dark theme colors (Catppuccin inspired)
+    bg_color = "#1e1e2e"
+    fg_color = "#cdd6f4"
+    input_bg = "#181825"
+    button_bg = "#313244"
+    button_active_bg = "#45475a"
+    select_bg = "#89b4fa"
+    select_fg = "#1e1e2e"
+    border_color = "#313244"
+
+    root.configure(bg=bg_color)
+
+    style.configure(".",
+        background=bg_color,
+        foreground=fg_color,
+        troughcolor=bg_color,
+        selectbackground=select_bg,
+        selectforeground=select_fg,
+        fieldbackground=input_bg,
+        borderwidth=1,
+        bordercolor=border_color
+    )
+
+    style.configure("Treeview",
+        background=input_bg,
+        fieldbackground=input_bg,
+        foreground=fg_color,
+        borderwidth=0,
+        rowheight=28
+    )
+    style.map("Treeview",
+        background=[('selected', select_bg)],
+        foreground=[('selected', select_fg)]
+    )
+
+    style.configure("Treeview.Heading",
+        background=button_bg,
+        foreground=fg_color,
+        borderwidth=1,
+        bordercolor=border_color,
+        relief="flat"
+    )
+    style.map("Treeview.Heading",
+        background=[('active', button_active_bg)]
+    )
+
+    style.configure("TButton",
+        background=button_bg,
+        foreground=fg_color,
+        borderwidth=0,
+        focuscolor=bg_color,
+        relief="flat",
+        padding=5
+    )
+    style.map("TButton",
+        background=[('active', button_active_bg), ('pressed', select_bg)],
+        foreground=[('pressed', select_fg)]
+    )
+
+    style.configure("TEntry",
+        fieldbackground=input_bg,
+        foreground=fg_color,
+        bordercolor=border_color,
+        lightcolor=bg_color,
+        darkcolor=bg_color,
+        padding=4
+    )
+
+    # Configure fonts to use the Ubuntu default font
+    # This guarantees smooth fonts if the fonts-ubuntu package is installed.
+    default_font = tkfont.nametofont("TkDefaultFont")
+    default_font.configure(family="Ubuntu", size=11, weight="bold")
+
+    heading_font = tkfont.nametofont("TkHeadingFont")
+    heading_font.configure(family="Ubuntu", size=12, weight="bold")
+
+    text_font = tkfont.nametofont("TkTextFont")
+    text_font.configure(family="Ubuntu", size=11, weight="bold")
+
+    style.configure(".", font="TkDefaultFont")
+    style.configure("Treeview", font=("Ubuntu", 11, "bold"))
+    style.configure("Treeview.Heading", font=("Ubuntu", 12, "bold"))
+
+    loading_label = Label(
+        root,
+        text="Loading...\n--------------\nChargement...",
+        font=("Sans Serif", 24))
     loading_label.pack(expand=True)
     root.update()
 
