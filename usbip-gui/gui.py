@@ -3,6 +3,7 @@ A graphical user interface for managing and interacting with USB/IP devices.
 """
 
 # requires python 3.8+
+import tkinter as tk
 from tkinter import Tk
 from tkinter.ttk import Treeview, Frame, Label, Entry, Button, Scrollbar, Style
 import tkinter.messagebox as messagebox
@@ -12,7 +13,7 @@ import re
 import time
 import os
 import sys
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 from urllib.parse import urlparse
 from gettext import textdomain, bindtextdomain, gettext as _
 from pathlib import Path
@@ -28,7 +29,12 @@ else:
 
 DEVICE_COLUMNS = [_("Bus ID"), _("Manufacturer"), _("Description")]
 DEVICE_COLUMN_WIDTHS = [8, 20, 50]
-LOCAL_DEVICE_COLUMNS = [_("Bus ID"), _("State"), _("Manufacturer"), _("Description")]
+LOCAL_DEVICE_COLUMNS = [
+    _("Bus ID"),
+    _("State"),
+    _("Manufacturer"),
+    _("Description"),
+]
 ATTACHED_COLUMNS = [
     _("Host"),
     _("Port"),
@@ -50,7 +56,9 @@ def init_kernel_modules():
 def init_usbip_server(port: int = 3240):
     """Initialize and start the usbipd server daemon."""
     subprocess.run(["sudo", "pkill", "usbipd"], check=False)
-    subprocess.run(["sudo", "usbipd", "-D", "--tcp-port", str(port)], check=False)
+    subprocess.run(
+        ["sudo", "usbipd", "-D", "--tcp-port", str(port)], check=False
+    )
 
 
 def scan():
@@ -188,10 +196,19 @@ def list_local_usb() -> List[Tuple[str, str, str, str]]:
     return parse_local_list(result.stdout)
 
 
-def list_remote_usb(server_ip: str, port: int = 3240) -> List[Tuple[str, str, str]]:
+def list_remote_usb(
+    server_ip: str, port: int = 3240
+) -> List[Tuple[str, str, str]]:
     """Execute usbip to list exportable devices on a remote server."""
     result = subprocess.run(
-        ["sudo", "usbip", "--tcp-port", str(port), "list", "--remote=" + server_ip],
+        [
+            "sudo",
+            "usbip",
+            "--tcp-port",
+            str(port),
+            "list",
+            "--remote=" + server_ip,
+        ],
         capture_output=True,
         text=True,
         check=False,
@@ -241,7 +258,8 @@ def attach_remote_usb(server_ip: str, bus_id: str, port: int = 3240):
         [
             "sudo",
             "usbip",
-            "--tcp-port", str(port),
+            "--tcp-port",
+            str(port),
             "attach",
             "--remote=" + server_ip,
             "--busid=" + bus_id,
@@ -268,6 +286,41 @@ def detach_remote_usb(port: int):
 
 
 # def update_list(list, values):
+
+
+class ToolTip:
+    def __init__(self, widget: tk.Widget, text: str):
+        self.widget = widget
+        self.text = text
+        self.tooltip_window = None
+        self.widget.bind("<Enter>", self.show_tooltip)
+        self.widget.bind("<Leave>", self.hide_tooltip)
+
+    def show_tooltip(self, event: Optional[tk.Event] = None):
+        if self.tooltip_window or not self.text:
+            return
+        x = self.widget.winfo_rootx() + 25
+        y = self.widget.winfo_rooty() + 20
+        self.tooltip_window = tw = tk.Toplevel(self.widget)
+        tw.wm_overrideredirect(True)
+        tw.wm_geometry(f"+{x}+{y}")
+
+        label = tk.Label(
+            tw,
+            text=self.text,
+            justify="left",
+            background="#313244",
+            foreground="#cdd6f4",
+            relief="solid",
+            borderwidth=1,
+            font=("Ubuntu", 10),
+        )
+        label.pack(ipadx=5, ipady=3)
+
+    def hide_tooltip(self, event: Optional[tk.Event] = None):
+        if self.tooltip_window:
+            self.tooltip_window.destroy()
+            self.tooltip_window = None
 
 
 class UsbIpGui:
@@ -297,11 +350,13 @@ class UsbIpGui:
             text=_("Refresh"),
             command=self.refresh_remote,
         )
+        ToolTip(self.remote_list_refresh_button, _("remote_refresh_tooltip"))
         self.remote_list_attach_button = Button(
             self.remote_control_frame,
             text=_("Attach Device"),
             command=self.attach_remote,
         )
+        ToolTip(self.remote_list_attach_button, _("remote_attach_tooltip"))
 
         self.remote_list_frame = Frame(self.root)
 
@@ -332,6 +387,7 @@ class UsbIpGui:
             text="EN / FR",
             command=self.toggle_language,
         )
+        ToolTip(self.lang_button, _("lang_toggle_tooltip"))
 
         self.remote_list_label.grid(column=0, row=0, padx=10)
         self.remote_ip_input.grid(column=1, row=0, padx=10)
@@ -363,22 +419,26 @@ class UsbIpGui:
             text=_("Apply Port & Restart"),
             command=self.restart_server,
         )
+        ToolTip(self.local_server_restart_button, _("local_restart_tooltip"))
         self.local_port_input.bind("<Return>", lambda e: self.restart_server())
         self.local_list_refresh_button = Button(
             self.local_control_frame,
             text=_("Refresh"),
             command=self.refresh_local,
         )
+        ToolTip(self.local_list_refresh_button, _("local_refresh_tooltip"))
         self.local_list_bind_button = Button(
             self.local_control_frame,
             text=_("Bind Device"),
             command=self.bind_local,
         )
+        ToolTip(self.local_list_bind_button, _("local_bind_tooltip"))
         self.local_list_unbind_button = Button(
             self.local_control_frame,
             text=_("Unbind Device"),
             command=self.unbind_local,
         )
+        ToolTip(self.local_list_unbind_button, _("local_unbind_tooltip"))
 
         self.local_list_frame = Frame(self.root)
         self.local_scroll = Scrollbar(self.local_list_frame, orient="vertical")
@@ -388,9 +448,7 @@ class UsbIpGui:
             show="headings",
             yscrollcommand=self.local_scroll.set,
         )
-        self.local_scroll.config(
-            command=getattr(self.local_listbox, "yview")
-        )
+        self.local_scroll.config(command=getattr(self.local_listbox, "yview"))
 
         self.local_scroll.pack(side="right", fill="y")
         self.local_listbox.pack(side="left", fill="both", expand=True)
@@ -427,11 +485,15 @@ class UsbIpGui:
             text=_("Refresh"),
             command=self.refresh_attached,
         )
+        ToolTip(
+            self.attached_list_refresh_button, _("attached_refresh_tooltip")
+        )
         self.detach_button = Button(
             self.attached_control_frame,
             text=_("Detach Device"),
             command=self.detach_remote,
         )
+        ToolTip(self.detach_button, _("attached_detach_tooltip"))
 
         self.attached_list_frame = Frame(self.root)
         self.attached_scroll = Scrollbar(

@@ -112,3 +112,30 @@ msgstr "Non associé"
 
 msgid "Port "
 msgstr "Port "
+
+msgid "remote_refresh_tooltip"
+msgstr "Actualiser la liste des périphériques USB distants"
+
+msgid "remote_attach_tooltip"
+msgstr "Attacher le périphérique USB distant sélectionné à cet ordinateur"
+
+msgid "lang_toggle_tooltip"
+msgstr "Basculer la langue de l'interface entre l'anglais et le français"
+
+msgid "local_restart_tooltip"
+msgstr "Appliquer le port sélectionné et redémarrer le serveur USB/IP local"
+
+msgid "local_refresh_tooltip"
+msgstr "Actualiser la liste des périphériques USB locaux"
+
+msgid "local_bind_tooltip"
+msgstr "Associer le périphérique USB local sélectionné pour le partager"
+
+msgid "local_unbind_tooltip"
+msgstr "Dissocier le périphérique USB local sélectionné pour ne plus le partager"
+
+msgid "attached_refresh_tooltip"
+msgstr "Actualiser la liste des périphériques USB distants actuellement attachés"
+
+msgid "attached_detach_tooltip"
+msgstr "Détacher le périphérique USB distant sélectionné de cet ordinateur"
