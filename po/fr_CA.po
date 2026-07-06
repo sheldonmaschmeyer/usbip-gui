@@ -100,3 +100,15 @@ msgstr "Périphériques attachés"
 #: usbip-gui/gui.py:408
 msgid "Detach Device"
 msgstr "Détacher le périphérique"
+
+msgid "state"
+msgstr "état"
+
+msgid "bound"
+msgstr "associé"
+
+msgid "unbound"
+msgstr "non associé"
+
+msgid "Port "
+msgstr "Port "
