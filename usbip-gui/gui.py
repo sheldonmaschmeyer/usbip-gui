@@ -272,10 +272,47 @@ def get_or_create_client_tunnel(
 
     Returns:
         tuple: (target_ip, target_port) pointing to the local tunnel if secure,
-               otherwise returns the original host and port.
+               otherwise returns the original host and port. Returns ("", 0) on abort.
     """
     if not secure:
         return host, port
+
+    import ssl
+    import socket
+    import hashlib
+    import json
+
+    context = ssl.create_default_context()
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+
+    try:
+        with socket.create_connection((host, port)) as sock:
+            with context.wrap_socket(sock, server_hostname=host) as ssock:
+                cert_der = ssock.getpeercert(binary_form=True)
+                
+        fingerprint = hashlib.sha256(cert_der).hexdigest()
+        fingerprint = ":".join(fingerprint[i:i+2] for i in range(0, len(fingerprint), 2)).upper()
+        
+        known_hosts_path = os.path.expanduser("~/.config/usbip-gui/known_hosts.json")
+        known_hosts = {}
+        if os.path.exists(known_hosts_path):
+            with open(known_hosts_path, "r") as f:
+                known_hosts = json.load(f)
+                
+        host_key = f"{host}:{port}"
+        if host_key not in known_hosts or known_hosts[host_key] != fingerprint:
+            msg = _("The server's certificate fingerprint is:\n\n{}\n\nDo you want to accept this connection?").format(fingerprint)
+            if messagebox.askyesno(_("Certificate Check"), msg):
+                known_hosts[host_key] = fingerprint
+                os.makedirs(os.path.dirname(known_hosts_path), exist_ok=True)
+                with open(known_hosts_path, "w") as f:
+                    json.dump(known_hosts, f)
+            else:
+                return "", 0
+    except Exception as e:
+        messagebox.showerror(_("Error"), _(f"Failed to check certificate: {e}"))
+        return "", 0
 
     key = (host, port)
     if key in ssl_client_processes:
@@ -311,6 +348,8 @@ def list_remote_usb(
     target_ip, target_port = get_or_create_client_tunnel(
         server_ip, port, secure, password
     )
+    if not target_ip:
+        return []
     result = subprocess.run(
         [
             "sudo",
@@ -374,6 +413,8 @@ def attach_remote_usb(
     target_ip, target_port = get_or_create_client_tunnel(
         server_ip, port, secure, password
     )
+    if not target_ip:
+        return type('obj', (object,), {'returncode': -1})()
     result = subprocess.run(
         [
             "sudo",
@@ -580,6 +621,17 @@ class UsbIpGui:
             command=self.unbind_local,
         )
         ToolTip(self.local_list_unbind_button, _("local_unbind_tooltip"))
+        
+        self.local_show_fingerprint_button = Button(
+            self.local_control_frame,
+            text=_("Show Fingerprint"),
+            command=self.show_fingerprint,
+        )
+        self.local_regen_cert_button = Button(
+            self.local_control_frame,
+            text=_("Regen Cert"),
+            command=self.regenerate_cert,
+        )
 
         self.local_list_frame = Frame(self.root)
         self.local_scroll = Scrollbar(self.local_list_frame, orient="vertical")
@@ -610,6 +662,8 @@ class UsbIpGui:
         self.local_list_refresh_button.grid(column=6, row=0, padx=10)
         self.local_list_bind_button.grid(column=7, row=0, padx=10)
         self.local_list_unbind_button.grid(column=8, row=0, padx=10)
+        self.local_show_fingerprint_button.grid(column=9, row=0, padx=10)
+        self.local_regen_cert_button.grid(column=10, row=0, padx=10)
 
         self.lang_button = Button(
             self.local_control_frame,
@@ -617,8 +671,8 @@ class UsbIpGui:
             command=self.toggle_language,
         )
         ToolTip(self.lang_button, _("lang_toggle_tooltip"))
-        self.local_control_frame.columnconfigure(9, weight=1)
-        self.lang_button.grid(column=9, row=0, padx=10, sticky="e")
+        self.local_control_frame.columnconfigure(11, weight=1)
+        self.lang_button.grid(column=12, row=0, padx=10, sticky="e")
 
         self.local_control_frame.grid(
             column=0, row=0, sticky="ew", pady=(10, 0)
@@ -680,6 +734,29 @@ class UsbIpGui:
         self.attached_list_frame.grid(
             column=0, row=5, sticky="nsew", padx=10, pady=10
         )
+
+    def show_fingerprint(self):
+        try:
+            import ssl_tunnel
+            cert_path, _key_path = ssl_tunnel.get_cert_paths()
+            fp = ssl_tunnel.get_cert_fingerprint(cert_path)
+            messagebox.showinfo(_("Certificate Fingerprint"), fp)
+        except Exception as e:
+            messagebox.showerror(_("Error"), str(e))
+            
+    def regenerate_cert(self):
+        try:
+            import ssl_tunnel
+            import os
+            cert_path, key_path = ssl_tunnel.get_cert_paths()
+            if os.path.exists(cert_path):
+                os.remove(cert_path)
+            if os.path.exists(key_path):
+                os.remove(key_path)
+            ssl_tunnel.generate_self_signed_cert(cert_path, key_path)
+            messagebox.showinfo(_("Success"), _("Certificate regenerated successfully. Please restart the server."))
+        except Exception as e:
+            messagebox.showerror(_("Error"), str(e))
 
     def refresh_local(self):
         """Refresh the local devices listbox with available USB devices."""
