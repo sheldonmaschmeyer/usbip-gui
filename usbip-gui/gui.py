@@ -55,7 +55,7 @@ ATTACHED_COLUMNS = [
 ]
 ATTACHED_COLUMN_WIDTHS = [21, 3, 8, 20, 50]
 USBIPD_PORT = 3240
-DEFAULT_GEOMETRY = "1300x842"
+DEFAULT_GEOMETRY = "1400x842"
 
 
 class TunnelState:
@@ -359,10 +359,7 @@ def get_or_create_client_tunnel(
                 if response != b"\x01":
                     messagebox.showerror(
                         _("Error"),
-                        _(
-                            "Authentication failed. "
-                            "Please check your password."
-                        ),
+                        _("auth_failed_msg"),
                     )
                     return "", 0
 
@@ -828,10 +825,7 @@ class UsbIpGui:
         if not var.get():
             messagebox.showwarning(
                 _("Warning"),
-                _(
-                    "Disabling Secure mode is not recommended "
-                    "over the internet."
-                ),
+                _("insecure_warning_msg"),
             )
 
     def show_fingerprint(self):
@@ -857,10 +851,7 @@ class UsbIpGui:
             ssl_tunnel.generate_self_signed_cert(cert_path, key_path)
             messagebox.showinfo(
                 _("Success"),
-                _(
-                    "Certificate regenerated successfully. "
-                    "Please restart the server."
-                ),
+                _("cert_regen"),
             )
         except Exception as e:
             messagebox.showerror(_("Error"), str(e))

@@ -161,10 +161,10 @@ msgstr "Empreinte du certificat"
 msgid "Success"
 msgstr "Succès"
 
-msgid "Certificate regenerated successfully. Please restart the server."
+msgid "cert_regen"
 msgstr "Certificat régénéré avec succès. Veuillez redémarrer le serveur."
 
-msgid "The server's certificate fingerprint is:\n\n{}\n\nDo you want to accept this connection?"
+msgid "cert_fingerprint_msg"
 msgstr "L'empreinte du certificat du serveur est :\n\n{}\n\nVoulez-vous accepter cette connexion ?"
 
 msgid "Certificate Check"
@@ -173,8 +173,8 @@ msgstr "Vérification du certificat"
 msgid "Warning"
 msgstr "Avertissement"
 
-msgid "Disabling Secure mode is not recommended over the internet."
+msgid "insecure_warning_msg"
 msgstr "Il n'est pas recommandé de désactiver le mode Sécurisé sur Internet."
 
-msgid "Authentication failed. Please check your password."
+msgid "auth_failed_msg"
 msgstr "Échec de l'authentification. Veuillez vérifier votre mot de passe."
