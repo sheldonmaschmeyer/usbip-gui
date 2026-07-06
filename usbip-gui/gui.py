@@ -382,20 +382,14 @@ class UsbIpGui:
         for device in remote_devices:
             self.remote_listbox.insert("", "end", values=device)
 
-        self.lang_button = Button(
-            self.remote_control_frame,
-            text="EN / FR",
-            command=self.toggle_language,
-        )
-        ToolTip(self.lang_button, _("lang_toggle_tooltip"))
+
 
         self.remote_list_label.grid(column=0, row=0, padx=10)
         self.remote_ip_input.grid(column=1, row=0, padx=10)
         self.remote_port_input.grid(column=2, row=0, padx=10)
         self.remote_list_refresh_button.grid(column=3, row=0, padx=10)
         self.remote_list_attach_button.grid(column=4, row=0, padx=10)
-        self.remote_control_frame.columnconfigure(5, weight=1)
-        self.lang_button.grid(column=5, row=0, padx=10, sticky="e")
+
 
         self.remote_control_frame.grid(
             column=0, row=2, sticky="ew", pady=(10, 0)
@@ -467,6 +461,15 @@ class UsbIpGui:
         self.local_list_refresh_button.grid(column=4, row=0, padx=10)
         self.local_list_bind_button.grid(column=5, row=0, padx=10)
         self.local_list_unbind_button.grid(column=6, row=0, padx=10)
+
+        self.lang_button = Button(
+            self.local_control_frame,
+            text="EN / FR",
+            command=self.toggle_language,
+        )
+        ToolTip(self.lang_button, _("lang_toggle_tooltip"))
+        self.local_control_frame.columnconfigure(7, weight=1)
+        self.lang_button.grid(column=7, row=0, padx=10, sticky="e")
 
         self.local_control_frame.grid(
             column=0, row=0, sticky="ew", pady=(10, 0)
