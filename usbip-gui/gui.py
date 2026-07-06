@@ -44,6 +44,7 @@ ATTACHED_COLUMNS = [
 ]
 ATTACHED_COLUMN_WIDTHS = [21, 3, 8, 20, 50]
 USBIPD_PORT = 3240
+DEFAULT_GEOMETRY = "1300x842"
 
 
 def init_kernel_modules():
@@ -327,7 +328,7 @@ class UsbIpGui:
     def __init__(self, root: Tk):
         self.root = root
         self.root.wm_title(_("USB/IP Peer"))
-        self.root.geometry("1002x842")
+        self.root.geometry(DEFAULT_GEOMETRY)
 
         # Configure grid to be responsive
         self.root.columnconfigure(0, weight=1)
@@ -382,14 +383,11 @@ class UsbIpGui:
         for device in remote_devices:
             self.remote_listbox.insert("", "end", values=device)
 
-
-
         self.remote_list_label.grid(column=0, row=0, padx=10)
         self.remote_ip_input.grid(column=1, row=0, padx=10)
         self.remote_port_input.grid(column=2, row=0, padx=10)
         self.remote_list_refresh_button.grid(column=3, row=0, padx=10)
         self.remote_list_attach_button.grid(column=4, row=0, padx=10)
-
 
         self.remote_control_frame.grid(
             column=0, row=2, sticky="ew", pady=(10, 0)
@@ -671,7 +669,7 @@ def start_app():
 
     root = Tk()
     root.wm_title(_("USB/IP Peer"))
-    root.geometry("1002x842")
+    root.geometry(DEFAULT_GEOMETRY)
 
     # Modernize UI with a better theme and fonts
     style = Style(root)
@@ -780,7 +778,9 @@ def start_app():
         "setup_usbip.sh",
     )
     if os.path.exists(script_path):
-        subprocess.run(["bash", script_path], check=False)
+        modules = ["usbip_core", "usbip_host", "vhci_hcd"]
+        if not all(os.path.exists(f"/sys/module/{mod}") for mod in modules):
+            subprocess.run(["bash", script_path], check=False)
 
     loading_label.destroy()
     UsbIpGui(root)
