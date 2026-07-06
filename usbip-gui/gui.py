@@ -603,24 +603,28 @@ class UsbIpGui:
         )
         ToolTip(self.local_server_restart_button, _("local_restart_tooltip"))
         self.local_port_input.bind("<Return>", lambda e: self.restart_server())
+        # Actions Frame
+        self.local_actions_frame = Frame(self.local_control_frame)
+
         self.local_list_refresh_button = Button(
-            self.local_control_frame,
+            self.local_actions_frame,
             text=_("Refresh"),
             command=self.refresh_local,
         )
         ToolTip(self.local_list_refresh_button, _("local_refresh_tooltip"))
         self.local_list_bind_button = Button(
-            self.local_control_frame,
+            self.local_actions_frame,
             text=_("Bind Device"),
             command=self.bind_local,
         )
         ToolTip(self.local_list_bind_button, _("local_bind_tooltip"))
         self.local_list_unbind_button = Button(
-            self.local_control_frame,
+            self.local_actions_frame,
             text=_("Unbind Device"),
             command=self.unbind_local,
         )
         ToolTip(self.local_list_unbind_button, _("local_unbind_tooltip"))
+
         
         self.local_show_fingerprint_button = Button(
             self.local_control_frame,
@@ -654,16 +658,20 @@ class UsbIpGui:
             self.local_listbox.insert("", "end", values=device)
 
         self.local_list_label.grid(column=0, row=0, padx=10)
-        self.local_port_label.grid(column=1, row=0, padx=(10, 0))
-        self.local_port_input.grid(column=2, row=0, padx=(0, 10))
+        self.local_port_label.grid(column=1, row=0, padx=(10, 0), sticky="e")
+        self.local_port_input.grid(column=2, row=0, padx=(0, 10), sticky="w")
         self.local_secure_checkbox.grid(column=3, row=0, padx=5)
         self.local_password_input.grid(column=4, row=0, padx=5)
         self.local_server_restart_button.grid(column=5, row=0, padx=10)
-        self.local_list_refresh_button.grid(column=6, row=0, padx=10)
-        self.local_list_bind_button.grid(column=7, row=0, padx=10)
-        self.local_list_unbind_button.grid(column=8, row=0, padx=10)
-        self.local_show_fingerprint_button.grid(column=9, row=0, padx=10)
-        self.local_regen_cert_button.grid(column=10, row=0, padx=10)
+        self.local_show_fingerprint_button.grid(column=6, row=0, padx=10)
+        self.local_regen_cert_button.grid(column=7, row=0, padx=10)
+
+        # Row 1: Actions (placed below Port, left justified)
+        self.local_actions_frame.grid(column=1, row=1, columnspan=7, sticky="w", pady=(5, 0))
+
+        self.local_list_refresh_button.grid(column=0, row=0, padx=(10, 5))
+        self.local_list_bind_button.grid(column=1, row=0, padx=5)
+        self.local_list_unbind_button.grid(column=2, row=0, padx=5)
 
         self.lang_button = Button(
             self.local_control_frame,
