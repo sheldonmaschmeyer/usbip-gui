@@ -139,3 +139,33 @@ msgstr "Actualiser la liste des périphériques USB distants actuellement attach
 
 msgid "attached_detach_tooltip"
 msgstr "Détacher le périphérique USB distant sélectionné de cet ordinateur"
+
+msgid "Secure"
+msgstr "Sécurisé"
+
+msgid "Apply Port & Restart"
+msgstr "Appliquer le port et redémarrer"
+
+msgid "Show Fingerprint"
+msgstr "Afficher l'empreinte"
+
+msgid "Regen Cert"
+msgstr "Régénérer le cert."
+
+msgid "Password required for secure connection"
+msgstr "Mot de passe requis pour une connexion sécurisée"
+
+msgid "Certificate Fingerprint"
+msgstr "Empreinte du certificat"
+
+msgid "Success"
+msgstr "Succès"
+
+msgid "Certificate regenerated successfully. Please restart the server."
+msgstr "Certificat régénéré avec succès. Veuillez redémarrer le serveur."
+
+msgid "The server's certificate fingerprint is:\n\n{}\n\nDo you want to accept this connection?"
+msgstr "L'empreinte du certificat du serveur est :\n\n{}\n\nVoulez-vous accepter cette connexion ?"
+
+msgid "Certificate Check"
+msgstr "Vérification du certificat"
