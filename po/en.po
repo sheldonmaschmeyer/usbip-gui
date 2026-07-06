@@ -140,3 +140,15 @@ msgstr "Refresh the list of currently attached remote USB devices"
 
 msgid "attached_detach_tooltip"
 msgstr "Detach the selected remote USB device from this computer"
+
+msgid "cert_fingerprint_msg"
+msgstr "The server's certificate fingerprint is:\n\n{}\n\nDo you want to accept this connection?"
+
+msgid "cert_regen"
+msgstr "Certificate regenerated successfully. Please restart the server."
+
+msgid "insecure_warning_msg"
+msgstr "Disabling Secure mode is not recommended over the internet."
+
+msgid "auth_failed_msg"
+msgstr "Authentication failed. Please check your password."
