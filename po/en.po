@@ -113,3 +113,30 @@ msgstr ""
 
 msgid "Port "
 msgstr ""
+
+msgid "remote_refresh_tooltip"
+msgstr "Refresh the list of remote USB devices"
+
+msgid "remote_attach_tooltip"
+msgstr "Attach the selected remote USB device to this computer"
+
+msgid "lang_toggle_tooltip"
+msgstr "Toggle interface language between English and French"
+
+msgid "local_restart_tooltip"
+msgstr "Apply the selected port and restart the local USB/IP server"
+
+msgid "local_refresh_tooltip"
+msgstr "Refresh the list of local USB devices"
+
+msgid "local_bind_tooltip"
+msgstr "Bind the selected local USB device to make it shareable"
+
+msgid "local_unbind_tooltip"
+msgstr "Unbind the selected local USB device to stop sharing it"
+
+msgid "attached_refresh_tooltip"
+msgstr "Refresh the list of currently attached remote USB devices"
+
+msgid "attached_detach_tooltip"
+msgstr "Detach the selected remote USB device from this computer"
