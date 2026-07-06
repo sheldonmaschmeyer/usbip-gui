@@ -169,3 +169,9 @@ msgstr "L'empreinte du certificat du serveur est :\n\n{}\n\nVoulez-vous accepter
 
 msgid "Certificate Check"
 msgstr "Vérification du certificat"
+
+msgid "Warning"
+msgstr "Avertissement"
+
+msgid "Disabling Secure mode is not recommended over the internet."
+msgstr "Il n'est pas recommandé de désactiver le mode Sécurisé sur Internet."
