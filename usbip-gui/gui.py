@@ -26,15 +26,15 @@ if _local_localedir.exists():
 else:
     bindtextdomain(APP_DOMAIN, localedir="/usr/local/share/locale/")
 
-DEVICE_COLUMNS = [_("bus_id"), _("manufacturer"), _("description")]
+DEVICE_COLUMNS = [_("Bus ID"), _("Manufacturer"), _("Description")]
 DEVICE_COLUMN_WIDTHS = [8, 20, 50]
-LOCAL_DEVICE_COLUMNS = [_("bus_id"), _("state"), _("manufacturer"), _("description")]
+LOCAL_DEVICE_COLUMNS = [_("Bus ID"), _("State"), _("Manufacturer"), _("Description")]
 ATTACHED_COLUMNS = [
-    _("host"),
-    _("port"),
-    _("bus_id"),
-    _("manufacturer"),
-    _("description"),
+    _("Host"),
+    _("Port"),
+    _("Bus ID"),
+    _("Manufacturer"),
+    _("Description"),
 ]
 ATTACHED_COLUMN_WIDTHS = [21, 3, 8, 20, 50]
 USBIPD_PORT = 3240
@@ -96,13 +96,13 @@ def parse_local_list(text: str) -> List[Tuple[str, str, str, str]]:
         manufacturer = man_info[0] if len(man_info) > 0 else ""
         description = ":".join(man_info[1:]) if len(man_info) > 1 else ""
 
-        state = _("unbound")
+        state = _("Unbound")
         if bus_id:
             driver_path = f"/sys/bus/usb/devices/{bus_id}/driver"
             if os.path.exists(driver_path) and os.path.islink(driver_path):
                 driver = os.path.basename(os.readlink(driver_path))
                 if driver == "usbip-host":
-                    state = _("bound")
+                    state = _("Bound")
 
         rows.append(
             (
@@ -321,7 +321,7 @@ class UsbIpGui:
         self.remote_listbox.pack(side="left", fill="both", expand=True)
 
         for col in DEVICE_COLUMNS:
-            self.remote_listbox.heading(col, text=col.title())
+            self.remote_listbox.heading(col, text=col)
 
         remote_devices = list_remote_usb("127.0.0.1", USBIPD_PORT)
         for device in remote_devices:
@@ -396,7 +396,7 @@ class UsbIpGui:
         self.local_listbox.pack(side="left", fill="both", expand=True)
 
         for col in LOCAL_DEVICE_COLUMNS:
-            self.local_listbox.heading(col, text=col.title())
+            self.local_listbox.heading(col, text=col)
 
         local_devices = list_local_usb()
         for device in local_devices:
@@ -451,8 +451,7 @@ class UsbIpGui:
         self.attached_listbox.pack(side="left", fill="both", expand=True)
 
         for col in ATTACHED_COLUMNS:
-            self.attached_listbox.heading(col, text=col.title())
-
+            self.attached_listbox.heading(col, text=col)
         attached_devices = list_attached_usb()
         for device in attached_devices:
             self.attached_listbox.insert("", "end", values=device)
