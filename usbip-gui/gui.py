@@ -284,6 +284,7 @@ def get_or_create_client_tunnel(
     import json
 
     context = ssl.create_default_context()
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
     context.check_hostname = False
     context.verify_mode = ssl.CERT_NONE
 
