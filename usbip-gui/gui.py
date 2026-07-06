@@ -28,6 +28,7 @@ else:
 
 DEVICE_COLUMNS = [_("bus_id"), _("manufacturer"), _("description")]
 DEVICE_COLUMN_WIDTHS = [8, 20, 50]
+LOCAL_DEVICE_COLUMNS = [_("bus_id"), _("state"), _("manufacturer"), _("description")]
 ATTACHED_COLUMNS = [
     _("host"),
     _("port"),
@@ -75,12 +76,12 @@ def scan():
 #    Sony Corp. : Batch Device / PlayStation 3 Controller (054c:0268)
 
 
-def parse_local_list(text: str) -> List[Tuple[str, str, str]]:
+def parse_local_list(text: str) -> List[Tuple[str, str, str, str]]:
     """Parse the text output of 'usbip list --local'."""
     if not text or not text.strip():
         return []
 
-    rows: List[Tuple[str, str, str]] = []
+    rows: List[Tuple[str, str, str, str]] = []
     devices = text.strip().split("\n\n")
     for device in devices:
         # print(device)
@@ -95,10 +96,18 @@ def parse_local_list(text: str) -> List[Tuple[str, str, str]]:
         manufacturer = man_info[0] if len(man_info) > 0 else ""
         description = ":".join(man_info[1:]) if len(man_info) > 1 else ""
 
+        state = _("unbound")
+        if bus_id:
+            driver_path = f"/sys/bus/usb/devices/{bus_id}/driver"
+            if os.path.exists(driver_path) and os.path.islink(driver_path):
+                driver = os.path.basename(os.readlink(driver_path))
+                if driver == "usbip-host":
+                    state = _("bound")
+
         rows.append(
             (
                 bus_id,
-                # bus_info[3],
+                state,
                 manufacturer,
                 description,
             )
@@ -168,7 +177,7 @@ def parse_attached_list(text: str) -> List[Tuple[str, int, str, str, str]]:
     return rows
 
 
-def list_local_usb() -> List[Tuple[str, str, str]]:
+def list_local_usb() -> List[Tuple[str, str, str, str]]:
     """Execute usbip to list local devices and return parsed rows."""
     result = subprocess.run(
         ["sudo", "usbip", "list", "--local"],
@@ -372,7 +381,7 @@ class UsbIpGui:
         self.local_scroll = Scrollbar(self.local_list_frame, orient="vertical")
         self.local_listbox = Treeview(
             self.local_list_frame,
-            columns=DEVICE_COLUMNS,
+            columns=LOCAL_DEVICE_COLUMNS,
             show="headings",
             yscrollcommand=self.local_scroll.set,
         )
@@ -383,7 +392,7 @@ class UsbIpGui:
         self.local_scroll.pack(side="right", fill="y")
         self.local_listbox.pack(side="left", fill="both", expand=True)
 
-        for col in DEVICE_COLUMNS:
+        for col in LOCAL_DEVICE_COLUMNS:
             self.local_listbox.heading(col, text=col.title())
 
         local_devices = list_local_usb()
@@ -507,6 +516,9 @@ class UsbIpGui:
         result = bind_local_usb(bus_id)
         if result.returncode == 0:
             print(bus_id + _(" bound successfully"))
+        
+        time.sleep(0.5)
+        self.refresh_local()
 
     def unbind_local(self):
         """Unbind the selected local USB device."""
@@ -521,6 +533,9 @@ class UsbIpGui:
         result = unbind_local_usb(bus_id)
         if result.returncode == 0:
             print(bus_id + _(" unbound successfully"))
+            
+        time.sleep(0.5)
+        self.refresh_local()
 
     def attach_remote(self):
         """Attach the selected remote USB device to the local machine."""
