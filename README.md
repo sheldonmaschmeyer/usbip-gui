@@ -96,61 +96,20 @@ To securely share a USB device across the internet:
 - [x] Dockerize and configure a comfortable coding environment.
 - [x] Apply types and linting rules, reviewing the code thoroughly before adding
   new features.
+- [x] reducing/eliminating global variable usage
 - [x] Add SSL/SSH encryption feature.
-- [] Cross-architecture (ARM and x86) production testing.
-- [] Look at K-Francis-H's TODOs including reducing/eliminating global variable
-  usage and moving code into modules.
-
-# Original K-Francis-H's README
-
-An attempt at wrapping the usbip linux kernel module with a gui for easier
-usability/configurability
-
-## Dependencies
-
-This project only runs on Linux, you will need to install `linux-tools-generic`
-to get the usbip kernel module. Installation should look something like this:
-
-**deb-based:**
-
-```bash
-sudo apt install linux-tools-generic
-
-sudo modprobe usbip_host
-sudo modprobe usbip_core
-sudo modprobe vhci_hcd
-
-#then to start the gui use either of
-
-sudo python3 gui.py
-
-#or
-
-python3 main.py
-
-#which uses gksudo to start the gui
-```
-
-You may also have problems getting `tkinter.ttk` to import correctly. This
-script assumes that you are using Python 3.8+ so make sure thats the version
-that you are using.
-
-## Development
-
-### Requirements
-
-- `python`
-- `python3-tkinter`
-- `usbip`
-- `meson`
-
-### Build
-
-```bash
-meson setup .build/
-meson compile -C .build/
-```
+- [ ] Move code into modules, i.e. compartmentalize sections of the guy.py.
+- [ ] Cross-architecture (ARM and x86) production testing.
+- [ ] Look at K-Francis-H's remaining TODOs.
 
 ## Screenshot
 
-![screenshot of usbip gui](screenshots/usbip_gui.png)
+![screenshot of usbip gui_v1_en](screenshots/usbip_gui_v1_en.png)
+Figure 1: USBIP GUI v1 English screenshot
+
+![screenshot of usbip gui_v1_fr](screenshots/usbip_gui_v1_fr.png)
+Figure 2: USBIP GUI v1 French screenshot
+
+## References
+[Original K-Francis-H's README](https://github.com/K-Francis-H/usbip-gui/blob/main/README.md)
+
