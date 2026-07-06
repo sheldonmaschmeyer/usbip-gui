@@ -239,6 +239,7 @@ def start_server(listen_port: int, target_port: int, password: str) -> None:
 
 
         context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
         context.load_cert_chain(certfile=cert_path, keyfile=key_path)
 
         bindsocket = socket.socket()
