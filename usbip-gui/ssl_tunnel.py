@@ -5,6 +5,22 @@ import argparse
 import tempfile
 import os
 import subprocess
+import hashlib
+
+def get_cert_paths() -> tuple[str, str]:
+    config_dir = os.path.expanduser("~/.config/usbip-gui")
+    os.makedirs(config_dir, exist_ok=True)
+    return os.path.join(config_dir, "server.crt"), os.path.join(config_dir, "server.key")
+
+def get_cert_fingerprint(cert_path: str) -> str:
+    if not os.path.exists(cert_path):
+        return "No certificate"
+    with open(cert_path, "r") as f:
+        cert_pem = f.read()
+    cert_der = ssl.PEM_cert_to_DER_cert(cert_pem)
+    fingerprint = hashlib.sha256(cert_der).hexdigest()
+    return ":".join(fingerprint[i:i+2] for i in range(0, len(fingerprint), 2)).upper()
+
 
 
 def generate_self_signed_cert(cert_path: str, key_path: str) -> None:
@@ -192,13 +208,12 @@ def start_server(listen_port: int, target_port: int, password: str) -> None:
             traffic to.
         password (str): The password required from clients for authentication.
     """
-    cert_fd, cert_path = tempfile.mkstemp(suffix=".crt")
-    key_fd, key_path = tempfile.mkstemp(suffix=".key")
-    os.close(cert_fd)
-    os.close(key_fd)
+    cert_path, key_path = get_cert_paths()
 
     try:
-        generate_self_signed_cert(cert_path, key_path)
+        if not os.path.exists(cert_path) or not os.path.exists(key_path):
+            generate_self_signed_cert(cert_path, key_path)
+
 
         context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
         context.load_cert_chain(certfile=cert_path, keyfile=key_path)
@@ -222,9 +237,9 @@ def start_server(listen_port: int, target_port: int, password: str) -> None:
                 ).start()
             except OSError as e:
                 print(f"SSL handshake error: {e}")
-    finally:
-        os.remove(cert_path)
-        os.remove(key_path)
+    except Exception as e:
+        print(f"Server error: {e}")
+
 
 
 def start_client(
