@@ -59,7 +59,7 @@ DEFAULT_GEOMETRY = "1300x842"
 
 ssl_server_process: Optional[subprocess.Popen[bytes]] = None
 ssl_client_processes: Dict[
-    Tuple[str, int], Tuple[int, subprocess.Popen[bytes]]
+    Tuple[str, int], Tuple[int, subprocess.Popen[bytes], str]
 ] = {}
 
 
@@ -96,6 +96,7 @@ def init_usbip_server(
     if ssl_server_process:
         try:
             ssl_server_process.terminate()
+            ssl_server_process.wait()
         except OSError:
             pass
         ssl_server_process = None
@@ -313,15 +314,43 @@ def get_or_create_client_tunnel(
                     json.dump(known_hosts, f)
             else:
                 return "", 0
+
+        if not password:
+            messagebox.showerror(_("Error"), _("Password required for secure connection"))
+            return "", 0
+
+        # Now that the fingerprint is trusted, verify the password
+        with socket.create_connection((host, port)) as sock:
+            with context.wrap_socket(sock, server_hostname=host) as ssock:
+                test_cert_der = ssock.getpeercert(binary_form=True)
+                if test_cert_der:
+                    test_fp = hashlib.sha256(test_cert_der).hexdigest().upper()
+                    test_fp = ":".join(test_fp[i:i+2] for i in range(0, len(test_fp), 2))
+                    if test_fp != fingerprint:
+                        raise ValueError("Fingerprint mismatch during auth check")
+                        
+                pwd_bytes = password.encode("utf-8")
+                pwd_len = len(pwd_bytes)
+                ssock.sendall(pwd_len.to_bytes(4, byteorder="big") + pwd_bytes)
+                
+                response = ssock.recv(1)
+                if response != b"\x01":
+                    messagebox.showerror(_("Error"), _("Authentication failed. Please check your password."))
+                    return "", 0
+
     except Exception as e:
         messagebox.showerror(_("Error"), _(f"Failed to check certificate: {e}"))
         return "", 0
 
     key = (host, port)
     if key in ssl_client_processes:
-        local_port, proc = ssl_client_processes[key]
+        local_port, proc, cached_password = ssl_client_processes[key]
         if proc.poll() is None:
-            return "127.0.0.1", local_port
+            if cached_password == password:
+                return "127.0.0.1", local_port
+            else:
+                proc.terminate()
+                proc.wait()
 
     local_port = random.randint(40000, 50000)
     proc = subprocess.Popen(
@@ -337,9 +366,11 @@ def get_or_create_client_tunnel(
             str(port),
             "--password",
             password,
+            "--fingerprint",
+            fingerprint,
         ]
     )
-    ssl_client_processes[key] = (local_port, proc)
+    ssl_client_processes[key] = (local_port, proc, password)
     time.sleep(1)  # Give tunnel time to start
     return "127.0.0.1", local_port
 
@@ -811,11 +842,7 @@ class UsbIpGui:
             return
         secure = self.remote_secure_var.get()
         password = self.remote_password_input.get()
-        if secure and not password:
-            messagebox.showerror(
-                _("Error"), _("Password required for secure connection")
-            )
-            return
+
         remote_devices = list_remote_usb(server_ip, port, secure, password)
         self.remote_listbox.delete(*self.remote_listbox.get_children())
         for device in remote_devices:
@@ -881,11 +908,6 @@ class UsbIpGui:
 
         secure = self.remote_secure_var.get()
         password = self.remote_password_input.get()
-        if secure and not password:
-            messagebox.showerror(
-                _("Error"), _("Password required for secure connection")
-            )
-            return
 
         print(server_ip)
         print(selection[0])
