@@ -291,6 +291,9 @@ def get_or_create_client_tunnel(
             with context.wrap_socket(sock, server_hostname=host) as ssock:
                 cert_der = ssock.getpeercert(binary_form=True)
                 
+        if not cert_der:
+            raise ValueError("No certificate provided by server")
+            
         fingerprint = hashlib.sha256(cert_der).hexdigest()
         fingerprint = ":".join(fingerprint[i:i+2] for i in range(0, len(fingerprint), 2)).upper()
         
@@ -414,7 +417,7 @@ def attach_remote_usb(
         server_ip, port, secure, password
     )
     if not target_ip:
-        return type('obj', (object,), {'returncode': -1})()
+        return subprocess.CompletedProcess(args=[], returncode=-1, stdout="", stderr="")
     result = subprocess.run(
         [
             "sudo",
@@ -514,11 +517,12 @@ class UsbIpGui:
         self.remote_ip_input.insert(0, "127.0.0.1")
         self.remote_port_input = Entry(self.remote_control_frame, width=6)
         self.remote_port_input.insert(0, str(USBIPD_PORT))
-        self.remote_secure_var = BooleanVar(value=False)
+        self.remote_secure_var = BooleanVar(value=True)
         self.remote_secure_checkbox = Checkbutton(
             self.remote_control_frame,
             text=_("Secure"),
             variable=self.remote_secure_var,
+            command=lambda: self.check_secure_warning(self.remote_secure_var)
         )
         self.remote_password_input = Entry(
             self.remote_control_frame, width=15, show="*"
@@ -586,11 +590,12 @@ class UsbIpGui:
         )
         self.local_port_input = Entry(self.local_control_frame, width=6)
         self.local_port_input.insert(0, str(USBIPD_PORT))
-        self.local_secure_var = BooleanVar(value=False)
+        self.local_secure_var = BooleanVar(value=True)
         self.local_secure_checkbox = Checkbutton(
             self.local_control_frame,
             text=_("Secure"),
             variable=self.local_secure_var,
+            command=lambda: self.check_secure_warning(self.local_secure_var)
         )
         self.local_password_input = Entry(
             self.local_control_frame, width=15, show="*"
@@ -742,6 +747,13 @@ class UsbIpGui:
         self.attached_list_frame.grid(
             column=0, row=5, sticky="nsew", padx=10, pady=10
         )
+
+    def check_secure_warning(self, var: BooleanVar):
+        if not var.get():
+            messagebox.showwarning(
+                _("Warning"), 
+                _("Disabling Secure mode is not recommended over the internet.")
+            )
 
     def show_fingerprint(self):
         try:
