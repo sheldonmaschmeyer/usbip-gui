@@ -175,3 +175,6 @@ msgstr "Avertissement"
 
 msgid "Disabling Secure mode is not recommended over the internet."
 msgstr "Il n'est pas recommandé de désactiver le mode Sécurisé sur Internet."
+
+msgid "Authentication failed. Please check your password."
+msgstr "Échec de l'authentification. Veuillez vérifier votre mot de passe."

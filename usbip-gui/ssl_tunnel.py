@@ -2,7 +2,6 @@ import ssl
 import socket
 import threading
 import argparse
-import tempfile
 import os
 import subprocess
 import hashlib
@@ -96,7 +95,13 @@ def server_handle_connection(
         cli_pwd = recv_exact(client_socket, cli_len)
         if cli_pwd != pwd_bytes:
             print("Authentication failed")
+            try:
+                client_socket.sendall(b"\x00")
+            except OSError:
+                pass
             return
+
+        client_socket.sendall(b"\x01")
 
         target_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         target_socket.connect((target_host, target_port))
@@ -117,6 +122,7 @@ def client_handle_connection(
     remote_port: int,
     password: str,
     context: ssl.SSLContext,
+    expected_fingerprint: str = "",
 ) -> None:
     """
     Handle a local client connection and tunnel it to the remote server.
@@ -141,11 +147,28 @@ def client_handle_connection(
         )
         ssl_remote_socket.connect((remote_host, remote_port))
 
+        if expected_fingerprint:
+            cert_der = ssl_remote_socket.getpeercert(binary_form=True)
+            if not cert_der:
+                print("Client connection error: No certificate provided by server")
+                return
+            import hashlib
+            actual_fp = hashlib.sha256(cert_der).hexdigest().upper()
+            actual_fp = ":".join(actual_fp[i:i+2] for i in range(0, len(actual_fp), 2))
+            if actual_fp != expected_fingerprint:
+                print(f"Client connection error: Fingerprint mismatch! Expected {expected_fingerprint}, got {actual_fp}")
+                return
+
         pwd_bytes = password.encode("utf-8")
         pwd_len = len(pwd_bytes)
         ssl_remote_socket.sendall(
             pwd_len.to_bytes(4, byteorder="big") + pwd_bytes
         )
+
+        auth_resp = ssl_remote_socket.recv(1)
+        if auth_resp != b"\x01":
+            print("Client connection error: Authentication failed at remote server")
+            return
 
         forward(local_socket, ssl_remote_socket)
     except OSError as e:
@@ -219,6 +242,7 @@ def start_server(listen_port: int, target_port: int, password: str) -> None:
         context.load_cert_chain(certfile=cert_path, keyfile=key_path)
 
         bindsocket = socket.socket()
+        bindsocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         bindsocket.bind(("0.0.0.0", listen_port))
         bindsocket.listen(5)
 
@@ -243,7 +267,7 @@ def start_server(listen_port: int, target_port: int, password: str) -> None:
 
 
 def start_client(
-    listen_port: int, remote_host: str, remote_port: int, password: str
+    listen_port: int, remote_host: str, remote_port: int, password: str, fingerprint: str = ""
 ) -> None:
     """
     Start the SSL proxy client.
@@ -263,6 +287,7 @@ def start_client(
     context.verify_mode = ssl.CERT_NONE
 
     bindsocket = socket.socket()
+    bindsocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     bindsocket.bind(("127.0.0.1", listen_port))
     bindsocket.listen(5)
 
@@ -275,7 +300,7 @@ def start_client(
         newsocket, _fromaddr = bindsocket.accept()
         threading.Thread(
             target=client_handle_connection,
-            args=(newsocket, remote_host, remote_port, password, context),
+            args=(newsocket, remote_host, remote_port, password, context, fingerprint),
         ).start()
 
 
@@ -292,6 +317,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--remote-port", type=int, required=False
     )  # for client
+    parser.add_argument(
+        "--fingerprint", type=str, required=False, default=""
+    )  # for client
     parser.add_argument("--password", type=str, required=True)
 
     args = parser.parse_args()
@@ -300,5 +328,5 @@ if __name__ == "__main__":
         start_server(args.listen_port, args.target_port, args.password)
     else:
         start_client(
-            args.listen_port, args.remote_host, args.remote_port, args.password
+            args.listen_port, args.remote_host, args.remote_port, args.password, args.fingerprint
         )
