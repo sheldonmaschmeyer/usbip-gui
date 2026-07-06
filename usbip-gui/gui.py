@@ -46,10 +46,10 @@ def init_kernel_modules():
     subprocess.run(["sudo", "modprobe", "vhci_hcd"], check=False)
 
 
-def init_usbip_server():
+def init_usbip_server(port: int = 3240):
     """Initialize and start the usbipd server daemon."""
-    # TODO log
-    subprocess.run(["sudo", "usbipd"], check=False)
+    subprocess.run(["sudo", "pkill", "usbipd"], check=False)
+    subprocess.run(["sudo", "usbipd", "-D", "--tcp-port", str(port)], check=False)
 
 
 def scan():
@@ -179,10 +179,10 @@ def list_local_usb() -> List[Tuple[str, str, str]]:
     return parse_local_list(result.stdout)
 
 
-def list_remote_usb(server_ip: str) -> List[Tuple[str, str, str]]:
+def list_remote_usb(server_ip: str, port: int = 3240) -> List[Tuple[str, str, str]]:
     """Execute usbip to list exportable devices on a remote server."""
     result = subprocess.run(
-        ["sudo", "usbip", "list", "--remote=" + server_ip],
+        ["sudo", "usbip", "--tcp-port", str(port), "list", "--remote=" + server_ip],
         capture_output=True,
         text=True,
         check=False,
@@ -226,12 +226,13 @@ def list_attached_usb() -> List[Tuple[str, int, str, str, str]]:
     return parse_attached_list(result.stdout)
 
 
-def attach_remote_usb(server_ip: str, bus_id: str):
+def attach_remote_usb(server_ip: str, bus_id: str, port: int = 3240):
     """Execute usbip to attach a remote device by bus ID."""
     result = subprocess.run(
         [
             "sudo",
             "usbip",
+            "--tcp-port", str(port),
             "attach",
             "--remote=" + server_ip,
             "--busid=" + bus_id,
@@ -278,7 +279,10 @@ class UsbIpGui:
             self.remote_control_frame,
             text=_("Remote USB Devices for "),
         )
-        self.remote_ip_input = Entry(self.remote_control_frame)
+        self.remote_ip_input = Entry(self.remote_control_frame, width=15)
+        self.remote_ip_input.insert(0, "127.0.0.1")
+        self.remote_port_input = Entry(self.remote_control_frame, width=6)
+        self.remote_port_input.insert(0, str(USBIPD_PORT))
         self.remote_list_refresh_button = Button(
             self.remote_control_frame,
             text=_("Refresh"),
@@ -310,7 +314,7 @@ class UsbIpGui:
         for col in DEVICE_COLUMNS:
             self.remote_listbox.heading(col, text=col.title())
 
-        remote_devices = list_remote_usb("127.0.0.1")
+        remote_devices = list_remote_usb("127.0.0.1", USBIPD_PORT)
         for device in remote_devices:
             self.remote_listbox.insert("", "end", values=device)
 
@@ -322,10 +326,11 @@ class UsbIpGui:
 
         self.remote_list_label.grid(column=0, row=0, padx=10)
         self.remote_ip_input.grid(column=1, row=0, padx=10)
-        self.remote_list_refresh_button.grid(column=2, row=0, padx=10)
-        self.remote_list_attach_button.grid(column=3, row=0, padx=10)
-        self.remote_control_frame.columnconfigure(4, weight=1)
-        self.lang_button.grid(column=4, row=0, padx=10, sticky="e")
+        self.remote_port_input.grid(column=2, row=0, padx=10)
+        self.remote_list_refresh_button.grid(column=3, row=0, padx=10)
+        self.remote_list_attach_button.grid(column=4, row=0, padx=10)
+        self.remote_control_frame.columnconfigure(5, weight=1)
+        self.lang_button.grid(column=5, row=0, padx=10, sticky="e")
 
         self.remote_control_frame.grid(
             column=0, row=0, sticky="ew", pady=(10, 0)
@@ -337,8 +342,16 @@ class UsbIpGui:
         # Local devices
         self.local_control_frame = Frame(self.root)
         self.local_list_label = Label(
-            self.local_control_frame, text=_("Local USB Devices")
+            self.local_control_frame, text=_("Local USB Devices (Port: )")
         )
+        self.local_port_input = Entry(self.local_control_frame, width=6)
+        self.local_port_input.insert(0, str(USBIPD_PORT))
+        self.local_server_restart_button = Button(
+            self.local_control_frame,
+            text=_("Apply Port & Restart"),
+            command=self.restart_server,
+        )
+        self.local_port_input.bind("<Return>", lambda e: self.restart_server())
         self.local_list_refresh_button = Button(
             self.local_control_frame,
             text=_("Refresh"),
@@ -378,9 +391,11 @@ class UsbIpGui:
             self.local_listbox.insert("", "end", values=device)
 
         self.local_list_label.grid(column=0, row=0, padx=10)
-        self.local_list_refresh_button.grid(column=1, row=0, padx=10)
-        self.local_list_bind_button.grid(column=3, row=0, padx=10)
-        self.local_list_unbind_button.grid(column=4, row=0, padx=10)
+        self.local_port_input.grid(column=1, row=0, padx=10)
+        self.local_server_restart_button.grid(column=2, row=0, padx=10)
+        self.local_list_refresh_button.grid(column=3, row=0, padx=10)
+        self.local_list_bind_button.grid(column=4, row=0, padx=10)
+        self.local_list_unbind_button.grid(column=5, row=0, padx=10)
 
         self.local_control_frame.grid(
             column=0, row=2, sticky="ew", pady=(10, 0)
@@ -447,10 +462,24 @@ class UsbIpGui:
         for device in local_devices:
             self.local_listbox.insert("", "end", values=device)
 
+    def restart_server(self):
+        """Restart the local usbipd server on the specified port."""
+        try:
+            port = int(self.local_port_input.get())
+        except ValueError:
+            messagebox.showerror(_("Error"), _("Invalid port number"))
+            return
+        init_usbip_server(port)
+
     def refresh_remote(self):
         """Refresh remote devices listbox with the given server IP."""
         server_ip = self.remote_ip_input.get()
-        remote_devices = list_remote_usb(server_ip)
+        try:
+            port = int(self.remote_port_input.get())
+        except ValueError:
+            messagebox.showerror(_("Error"), _("Invalid port number"))
+            return
+        remote_devices = list_remote_usb(server_ip, port)
         self.remote_listbox.delete(*self.remote_listbox.get_children())
         for device in remote_devices:
             self.remote_listbox.insert("", "end", values=device)
@@ -496,6 +525,11 @@ class UsbIpGui:
     def attach_remote(self):
         """Attach the selected remote USB device to the local machine."""
         server_ip = self.remote_ip_input.get()
+        try:
+            port = int(self.remote_port_input.get())
+        except ValueError:
+            messagebox.showerror(_("Error"), _("Invalid port number"))
+            return
         selection = self.remote_listbox.selection()
         if not selection:
             print(_("no selection to attach"))
@@ -507,7 +541,7 @@ class UsbIpGui:
         print(self.remote_listbox.item(selection[0]))
         bus_id = self.remote_listbox.item(selection[0])["values"][0]
         print(bus_id)
-        result = attach_remote_usb(server_ip, bus_id)
+        result = attach_remote_usb(server_ip, bus_id, port)
         print(result.returncode)
         # if result.returncode == 0:
         #     attached_devices[bus_id] = {
@@ -632,6 +666,7 @@ def start_app():
         lightcolor=bg_color,
         darkcolor=bg_color,
         padding=4,
+        insertcolor=fg_color,
     )
 
     # Configure fonts to use the Ubuntu default font
