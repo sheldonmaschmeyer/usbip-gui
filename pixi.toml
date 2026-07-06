@@ -5,13 +5,18 @@ platforms = ["linux-64"]
 
 [dependencies]
 python = ">=3.10"
+
+[feature.dev.dependencies]
 flake8 = "*"
 black = "*"
 pylint = "*"
 pytest = "*"
+pyright = ">=1.1.411,<2"
 
+[environments]
+default = ["dev"]
 [tasks]
 usbip = "python3 usbip-gui/main.py"
-lint = "flake8 . && pylint ."
+lint = "flake8 . && pylint . && pyright ."
 format = "black ."
 test = "pytest"

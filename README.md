@@ -55,12 +55,48 @@ msgfmt po/en.po -o share/locale/en/LC_MESSAGES/usbip-gui.mo
 msgfmt po/fr_CA.po -o share/locale/fr_CA/LC_MESSAGES/usbip-gui.mo
 ```
 
+## Secure Connection (SSL Tunneling)
+
+This fork introduces a seamlessly integrated SSL proxy mechanism to encrypt
+`usbip` traffic over the internet using self-signed certificates and a custom
+pre-shared password. `usbip` normally transmits data over unencrypted TCP, which
+is highly insecure on public networks.
+
+### How it works
+**Note:** Port 3240 used in explanations but, you may use a custom port.
+When the **Secure** checkbox is enabled, the application spawns an isolated
+Python-based SSL tunneling script (`ssl_tunnel.py`):
+1. **On the Server (Host):** The tunnel dynamically generates a temporary
+   self-signed RSA certificate and binds to the default `usbip` port (`3240`).
+   The actual `usbipd` service is re-assigned to listen on an internal-only port
+   (`13240`).
+2. **On the Client:** A background client proxy binds to a random local port
+   (e.g. `45864`) and initiates a secure SSL connection to the server on port
+   `3240`. `usbip` commands on the client (like `list` and `attach`) are
+   transparently forwarded to this local proxy.
+3. **Authentication:** The server verifies the pre-shared password before
+   allowing any traffic to reach the underlying `usbipd` daemon.
+
+### Connecting over the Internet
+
+To securely share a USB device across the internet:
+1. **Port Forwarding:** You only need to open and port-forward TCP port
+   **`3240`** on the Server's router. You do **not** need to open port `13240`.
+2. **Start the Server:** In the GUI's "Server" tab, check the **Secure** box,
+   enter a secure password, and click **Restart Server**.
+3. **Connect the Client:** In the GUI's "Client" tab, enter the Server's public
+   IP address or hostname in the **Host** field. Leave the **Port** as `3240`.
+4. Check the **Secure** box and enter the exact same password you set on the
+   server.
+5. Click **Refresh Remote** or **Attach** to seamlessly connect over the
+   encrypted tunnel!
+
 ## Tasks
 
 - [x] Dockerize and configure a comfortable coding environment.
 - [x] Apply types and linting rules, reviewing the code thoroughly before adding
   new features.
-- [] Add SSL/SSH encryption feature.
+- [x] Add SSL/SSH encryption feature.
 - [] Cross-architecture (ARM and x86) production testing.
 - [] Look at K-Francis-H's TODOs including reducing/eliminating global variable
   usage and moving code into modules.
