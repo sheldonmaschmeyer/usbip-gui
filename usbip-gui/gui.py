@@ -999,6 +999,19 @@ def start_app():
     )
 
     style.configure(
+        "TCheckbutton",
+        background=bg_color,
+        foreground=fg_color,
+        focuscolor=bg_color,
+    )
+    style.map(
+        "TCheckbutton",
+        background=[("active", bg_color), ("pressed", bg_color)],
+        foreground=[("active", fg_color)],
+        indicatorcolor=[("selected", select_bg), ("pressed", select_bg)],
+    )
+
+    style.configure(
         "TEntry",
         fieldbackground=input_bg,
         foreground=fg_color,
