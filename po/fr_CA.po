@@ -17,24 +17,24 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 
 #: usbip-gui/gui.py:17 usbip-gui/gui.py:22
-msgid "bus_id"
-msgstr "id_bus"
+msgid "Bus ID"
+msgstr "ID du bus"
 
 #: usbip-gui/gui.py:17 usbip-gui/gui.py:23
-msgid "manufacturer"
-msgstr "fabricant"
+msgid "Manufacturer"
+msgstr "Fabricant"
 
 #: usbip-gui/gui.py:17 usbip-gui/gui.py:24
-msgid "description"
-msgstr "description"
+msgid "Description"
+msgstr "Description"
 
 #: usbip-gui/gui.py:20
-msgid "host"
-msgstr "hôte"
+msgid "Host"
+msgstr "Hôte"
 
 #: usbip-gui/gui.py:21
-msgid "port"
-msgstr "port"
+msgid "Port"
+msgstr "Port"
 
 #: usbip-gui/gui.py:79 usbip-gui/gui.py:80
 msgid "no selection to bind"
@@ -101,14 +101,14 @@ msgstr "Périphériques attachés"
 msgid "Detach Device"
 msgstr "Détacher le périphérique"
 
-msgid "state"
-msgstr "état"
+msgid "State"
+msgstr "État"
 
-msgid "bound"
-msgstr "associé"
+msgid "Bound"
+msgstr "Associé"
 
-msgid "unbound"
-msgstr "non associé"
+msgid "Unbound"
+msgstr "Non associé"
 
 msgid "Port "
 msgstr "Port "
