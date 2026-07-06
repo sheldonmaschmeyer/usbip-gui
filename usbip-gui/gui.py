@@ -4,19 +4,20 @@ A graphical user interface for managing and interacting with USB/IP devices.
 
 # requires python 3.8+
 from tkinter import Tk
-from tkinter.ttk import Treeview, Frame, Label, Entry, Button
+from tkinter.ttk import Treeview, Frame, Label, Entry, Button, Scrollbar, Style
 import tkinter.messagebox as messagebox
+import tkinter.font as tkfont
 import subprocess
 import re
 import time
+import os
+import sys
 from typing import List, Tuple
 from urllib.parse import urlparse
 from gettext import textdomain, bindtextdomain, gettext as _
+from pathlib import Path
 
 APP_DOMAIN = "usbip-gui"
-
-import os
-from pathlib import Path
 
 textdomain(APP_DOMAIN)
 _local_localedir = Path(__file__).parent.parent / "share" / "locale"
@@ -55,8 +56,6 @@ def scan():
     """Scan for devices (Placeholder function)."""
     # TODO
     return 0
-
-
 
 
 # sample output to parse for parse_local_list(text)
@@ -281,18 +280,30 @@ class UsbIpGui:
         )
         self.remote_ip_input = Entry(self.remote_control_frame)
         self.remote_list_refresh_button = Button(
-            self.remote_control_frame, text=_("Refresh"), command=self.refresh_remote
+            self.remote_control_frame,
+            text=_("Refresh"),
+            command=self.refresh_remote,
         )
         self.remote_list_attach_button = Button(
-            self.remote_control_frame, text=_("Attach Device"), command=self.attach_remote
+            self.remote_control_frame,
+            text=_("Attach Device"),
+            command=self.attach_remote,
         )
 
         self.remote_list_frame = Frame(self.root)
-        from tkinter.ttk import Scrollbar
-        self.remote_scroll = Scrollbar(self.remote_list_frame, orient="vertical")
-        self.remote_listbox = Treeview(self.remote_list_frame, columns=DEVICE_COLUMNS, show="headings", yscrollcommand=self.remote_scroll.set)
-        self.remote_scroll.config(command=self.remote_listbox.yview)
 
+        self.remote_scroll = Scrollbar(
+            self.remote_list_frame, orient="vertical"
+        )
+        self.remote_listbox = Treeview(
+            self.remote_list_frame,
+            columns=DEVICE_COLUMNS,
+            show="headings",
+            yscrollcommand=self.remote_scroll.set,
+        )
+        self.remote_scroll.config(
+            command=getattr(self.remote_listbox, "yview")
+        )
         self.remote_scroll.pack(side="right", fill="y")
         self.remote_listbox.pack(side="left", fill="both", expand=True)
 
@@ -304,7 +315,9 @@ class UsbIpGui:
             self.remote_listbox.insert("", "end", values=device)
 
         self.lang_button = Button(
-            self.remote_control_frame, text="EN / FR", command=self.toggle_language
+            self.remote_control_frame,
+            text="EN / FR",
+            command=self.toggle_language,
         )
 
         self.remote_list_label.grid(column=0, row=0, padx=10)
@@ -314,26 +327,45 @@ class UsbIpGui:
         self.remote_control_frame.columnconfigure(4, weight=1)
         self.lang_button.grid(column=4, row=0, padx=10, sticky="e")
 
-        self.remote_control_frame.grid(column=0, row=0, sticky="ew", pady=(10, 0))
-        self.remote_list_frame.grid(column=0, row=1, sticky="nsew", padx=10, pady=10)
+        self.remote_control_frame.grid(
+            column=0, row=0, sticky="ew", pady=(10, 0)
+        )
+        self.remote_list_frame.grid(
+            column=0, row=1, sticky="nsew", padx=10, pady=10
+        )
 
         # Local devices
         self.local_control_frame = Frame(self.root)
-        self.local_list_label = Label(self.local_control_frame, text=_("Local USB Devices"))
+        self.local_list_label = Label(
+            self.local_control_frame, text=_("Local USB Devices")
+        )
         self.local_list_refresh_button = Button(
-            self.local_control_frame, text=_("Refresh"), command=self.refresh_local
+            self.local_control_frame,
+            text=_("Refresh"),
+            command=self.refresh_local,
         )
         self.local_list_bind_button = Button(
-            self.local_control_frame, text=_("Bind Device"), command=self.bind_local
+            self.local_control_frame,
+            text=_("Bind Device"),
+            command=self.bind_local,
         )
         self.local_list_unbind_button = Button(
-            self.local_control_frame, text=_("Unbind Device"), command=self.unbind_local
+            self.local_control_frame,
+            text=_("Unbind Device"),
+            command=self.unbind_local,
         )
 
         self.local_list_frame = Frame(self.root)
         self.local_scroll = Scrollbar(self.local_list_frame, orient="vertical")
-        self.local_listbox = Treeview(self.local_list_frame, columns=DEVICE_COLUMNS, show="headings", yscrollcommand=self.local_scroll.set)
-        self.local_scroll.config(command=self.local_listbox.yview)
+        self.local_listbox = Treeview(
+            self.local_list_frame,
+            columns=DEVICE_COLUMNS,
+            show="headings",
+            yscrollcommand=self.local_scroll.set,
+        )
+        self.local_scroll.config(
+            command=getattr(self.local_listbox, "yview")
+        )
 
         self.local_scroll.pack(side="right", fill="y")
         self.local_listbox.pack(side="left", fill="both", expand=True)
@@ -350,8 +382,12 @@ class UsbIpGui:
         self.local_list_bind_button.grid(column=3, row=0, padx=10)
         self.local_list_unbind_button.grid(column=4, row=0, padx=10)
 
-        self.local_control_frame.grid(column=0, row=2, sticky="ew", pady=(10, 0))
-        self.local_list_frame.grid(column=0, row=3, sticky="nsew", padx=10, pady=10)
+        self.local_control_frame.grid(
+            column=0, row=2, sticky="ew", pady=(10, 0)
+        )
+        self.local_list_frame.grid(
+            column=0, row=3, sticky="nsew", padx=10, pady=10
+        )
 
         # Attached devices
         self.attached_control_frame = Frame(self.root)
@@ -359,16 +395,29 @@ class UsbIpGui:
             self.attached_control_frame, text=_("Attached Devices")
         )
         self.attached_list_refresh_button = Button(
-            self.attached_control_frame, text=_("Refresh"), command=self.refresh_attached
+            self.attached_control_frame,
+            text=_("Refresh"),
+            command=self.refresh_attached,
         )
         self.detach_button = Button(
-            self.attached_control_frame, text=_("Detach Device"), command=self.detach_remote
+            self.attached_control_frame,
+            text=_("Detach Device"),
+            command=self.detach_remote,
         )
 
         self.attached_list_frame = Frame(self.root)
-        self.attached_scroll = Scrollbar(self.attached_list_frame, orient="vertical")
-        self.attached_listbox = Treeview(self.attached_list_frame, columns=ATTACHED_COLUMNS, show="headings", yscrollcommand=self.attached_scroll.set)
-        self.attached_scroll.config(command=self.attached_listbox.yview)
+        self.attached_scroll = Scrollbar(
+            self.attached_list_frame, orient="vertical"
+        )
+        self.attached_listbox = Treeview(
+            self.attached_list_frame,
+            columns=ATTACHED_COLUMNS,
+            show="headings",
+            yscrollcommand=self.attached_scroll.set,
+        )
+        self.attached_scroll.config(
+            command=getattr(self.attached_listbox, "yview")
+        )
 
         self.attached_scroll.pack(side="right", fill="y")
         self.attached_listbox.pack(side="left", fill="both", expand=True)
@@ -384,9 +433,12 @@ class UsbIpGui:
         self.attached_list_refresh_button.grid(column=1, row=0, padx=10)
         self.detach_button.grid(column=2, row=0, padx=10)
 
-        self.attached_control_frame.grid(column=0, row=4, sticky="ew", pady=(10, 0))
-        self.attached_list_frame.grid(column=0, row=5, sticky="nsew", padx=10, pady=10)
-
+        self.attached_control_frame.grid(
+            column=0, row=4, sticky="ew", pady=(10, 0)
+        )
+        self.attached_list_frame.grid(
+            column=0, row=5, sticky="nsew", padx=10, pady=10
+        )
 
     def refresh_local(self):
         """Refresh the local devices listbox with available USB devices."""
@@ -395,25 +447,22 @@ class UsbIpGui:
         for device in local_devices:
             self.local_listbox.insert("", "end", values=device)
 
-
     def refresh_remote(self):
-        """Refresh the remote devices listbox by querying the given server IP."""
+        """Refresh remote devices listbox with the given server IP."""
         server_ip = self.remote_ip_input.get()
         remote_devices = list_remote_usb(server_ip)
         self.remote_listbox.delete(*self.remote_listbox.get_children())
         for device in remote_devices:
             self.remote_listbox.insert("", "end", values=device)
 
-
     def refresh_attached(self):
         """
-        Refresh the attached devices listbox with currently imported USB devices.
+        Refresh attached devices listbox with imported USB devices.
         """
         attached_devices = list_attached_usb()
         self.attached_listbox.delete(*self.attached_listbox.get_children())
         for device in attached_devices:
             self.attached_listbox.insert("", "end", values=device)
-
 
     # TODO these are both wrong
     def bind_local(self):
@@ -430,7 +479,6 @@ class UsbIpGui:
         if result.returncode == 0:
             print(bus_id + _(" bound successfully"))
 
-
     def unbind_local(self):
         """Unbind the selected local USB device."""
         selection = self.local_listbox.selection()
@@ -444,7 +492,6 @@ class UsbIpGui:
         result = unbind_local_usb(bus_id)
         if result.returncode == 0:
             print(bus_id + _(" unbound successfully"))
-
 
     def attach_remote(self):
         """Attach the selected remote USB device to the local machine."""
@@ -475,7 +522,6 @@ class UsbIpGui:
         self.refresh_local()
         self.refresh_attached()
 
-
     # TODO get selection
     def detach_remote(self):
         """Detach the selected imported USB device from the local machine."""
@@ -495,9 +541,8 @@ class UsbIpGui:
         self.refresh_attached()
 
     def toggle_language(self):
-        """Toggle the interface language between English and French Canadian and restart."""
-        import os
-        import sys
+        """Toggle the language (English/French Canadian) and restart."""
+
         current_lang = os.environ.get("LANGUAGE", "en")
         new_lang = "fr_CA" if current_lang != "fr_CA" else "en"
         os.environ["LANGUAGE"] = new_lang
@@ -506,9 +551,6 @@ class UsbIpGui:
 
 def start_app():
     """Initialize and launch the main Tkinter GUI application."""
-    import os
-    from tkinter.ttk import Style
-    import tkinter.font as tkfont
 
     root = Tk()
     root.wm_title(_("USB/IP Peer"))
@@ -516,8 +558,8 @@ def start_app():
 
     # Modernize UI with a better theme and fonts
     style = Style(root)
-    if 'clam' in style.theme_names():
-        style.theme_use('clam')
+    if "clam" in style.theme_names():
+        style.theme_use("clam")
 
     # Modern dark theme colors (Catppuccin inspired)
     bg_color = "#1e1e2e"
@@ -531,7 +573,8 @@ def start_app():
 
     root.configure(bg=bg_color)
 
-    style.configure(".",
+    style.configure(
+        ".",
         background=bg_color,
         foreground=fg_color,
         troughcolor=bg_color,
@@ -539,52 +582,56 @@ def start_app():
         selectforeground=select_fg,
         fieldbackground=input_bg,
         borderwidth=1,
-        bordercolor=border_color
+        bordercolor=border_color,
     )
 
-    style.configure("Treeview",
+    style.configure(
+        "Treeview",
         background=input_bg,
         fieldbackground=input_bg,
         foreground=fg_color,
         borderwidth=0,
-        rowheight=28
+        rowheight=28,
     )
-    style.map("Treeview",
-        background=[('selected', select_bg)],
-        foreground=[('selected', select_fg)]
+    style.map(
+        "Treeview",
+        background=[("selected", select_bg)],
+        foreground=[("selected", select_fg)],
     )
 
-    style.configure("Treeview.Heading",
+    style.configure(
+        "Treeview.Heading",
         background=button_bg,
         foreground=fg_color,
         borderwidth=1,
         bordercolor=border_color,
-        relief="flat"
+        relief="flat",
     )
-    style.map("Treeview.Heading",
-        background=[('active', button_active_bg)]
-    )
+    style.map("Treeview.Heading", background=[("active", button_active_bg)])
 
-    style.configure("TButton",
+    style.configure(
+        "TButton",
         background=button_bg,
         foreground=fg_color,
         borderwidth=0,
         focuscolor=bg_color,
         relief="flat",
-        padding=5
+        padding=5,
     )
-    style.map("TButton",
-        background=[('active', button_active_bg), ('pressed', select_bg)],
-        foreground=[('pressed', select_fg)]
+    style.map(
+        "TButton",
+        background=[("active", button_active_bg), ("pressed", select_bg)],
+        foreground=[("pressed", select_fg)],
     )
 
-    style.configure("TEntry",
+    style.configure(
+        "TEntry",
         fieldbackground=input_bg,
         foreground=fg_color,
         bordercolor=border_color,
         lightcolor=bg_color,
         darkcolor=bg_color,
-        padding=4
+        padding=4,
     )
 
     # Configure fonts to use the Ubuntu default font
@@ -605,13 +652,14 @@ def start_app():
     loading_label = Label(
         root,
         text="Loading...\n--------------\nChargement...",
-        font=("Sans Serif", 24))
+        font=("Sans Serif", 24),
+    )
     loading_label.pack(expand=True)
     root.update()
 
     script_path = os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        "setup_usbip.sh"
+        "setup_usbip.sh",
     )
     if os.path.exists(script_path):
         subprocess.run(["bash", script_path], check=False)
