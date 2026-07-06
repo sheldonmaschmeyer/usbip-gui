@@ -4,8 +4,17 @@ A graphical user interface for managing and interacting with USB/IP devices.
 
 # requires python 3.8+
 import tkinter as tk
-from tkinter import Tk
-from tkinter.ttk import Treeview, Frame, Label, Entry, Button, Scrollbar, Style
+from tkinter import Tk, BooleanVar
+from tkinter.ttk import (
+    Treeview,
+    Frame,
+    Label,
+    Entry,
+    Button,
+    Scrollbar,
+    Style,
+    Checkbutton,
+)
 import tkinter.messagebox as messagebox
 import tkinter.font as tkfont
 import subprocess
@@ -13,7 +22,9 @@ import re
 import time
 import os
 import sys
-from typing import List, Tuple, Optional
+import atexit
+import random
+from typing import List, Tuple, Optional, Dict
 from urllib.parse import urlparse
 from gettext import textdomain, bindtextdomain, gettext as _
 from pathlib import Path
@@ -46,6 +57,28 @@ ATTACHED_COLUMN_WIDTHS = [21, 3, 8, 20, 50]
 USBIPD_PORT = 3240
 DEFAULT_GEOMETRY = "1300x842"
 
+ssl_server_process: Optional[subprocess.Popen[bytes]] = None
+ssl_client_processes: Dict[
+    Tuple[str, int], Tuple[int, subprocess.Popen[bytes]]
+] = {}
+
+
+def cleanup_tunnels():
+    """Terminate any background SSL tunnel processes."""
+    if ssl_server_process:
+        try:
+            ssl_server_process.terminate()
+        except OSError:
+            pass
+    for _local_port, proc in ssl_client_processes.values():
+        try:
+            proc.terminate()
+        except OSError:
+            pass
+
+
+atexit.register(cleanup_tunnels)
+
 
 def init_kernel_modules():
     """Load the required kernel modules for USB/IP."""
@@ -54,12 +87,42 @@ def init_kernel_modules():
     subprocess.run(["sudo", "modprobe", "vhci_hcd"], check=False)
 
 
-def init_usbip_server(port: int = 3240):
+def init_usbip_server(
+    port: int = 3240, secure: bool = False, password: str = ""
+):
     """Initialize and start the usbipd server daemon."""
+    global ssl_server_process
     subprocess.run(["sudo", "pkill", "usbipd"], check=False)
-    subprocess.run(
-        ["sudo", "usbipd", "-D", "--tcp-port", str(port)], check=False
-    )
+    if ssl_server_process:
+        try:
+            ssl_server_process.terminate()
+        except OSError:
+            pass
+        ssl_server_process = None
+
+    if secure:
+        target_port = port + 10000
+        subprocess.run(
+            ["sudo", "usbipd", "-D", "--tcp-port", str(target_port)],
+            check=False,
+        )
+        ssl_server_process = subprocess.Popen(
+            [
+                sys.executable,
+                os.path.join(os.path.dirname(__file__), "ssl_tunnel.py"),
+                "server",
+                "--listen-port",
+                str(port),
+                "--target-port",
+                str(target_port),
+                "--password",
+                password,
+            ]
+        )
+    else:
+        subprocess.run(
+            ["sudo", "usbipd", "-D", "--tcp-port", str(port)], check=False
+        )
 
 
 def scan():
@@ -197,18 +260,65 @@ def list_local_usb() -> List[Tuple[str, str, str, str]]:
     return parse_local_list(result.stdout)
 
 
+def get_or_create_client_tunnel(
+    host: str, port: int, secure: bool, password: str
+) -> Tuple[str, int]:
+    """
+    Get an existing local proxy tunnel for a remote host, or create a new one.
+
+    If secure is True, this spawns a local instance of ssl_tunnel.py configured
+    to forward traffic securely to the specified remote host and port, caching
+    the process to avoid reconnecting.
+
+    Returns:
+        tuple: (target_ip, target_port) pointing to the local tunnel if secure,
+               otherwise returns the original host and port.
+    """
+    if not secure:
+        return host, port
+
+    key = (host, port)
+    if key in ssl_client_processes:
+        local_port, proc = ssl_client_processes[key]
+        if proc.poll() is None:
+            return "127.0.0.1", local_port
+
+    local_port = random.randint(40000, 50000)
+    proc = subprocess.Popen(
+        [
+            sys.executable,
+            os.path.join(os.path.dirname(__file__), "ssl_tunnel.py"),
+            "client",
+            "--listen-port",
+            str(local_port),
+            "--remote-host",
+            host,
+            "--remote-port",
+            str(port),
+            "--password",
+            password,
+        ]
+    )
+    ssl_client_processes[key] = (local_port, proc)
+    time.sleep(1)  # Give tunnel time to start
+    return "127.0.0.1", local_port
+
+
 def list_remote_usb(
-    server_ip: str, port: int = 3240
+    server_ip: str, port: int = 3240, secure: bool = False, password: str = ""
 ) -> List[Tuple[str, str, str]]:
     """Execute usbip to list exportable devices on a remote server."""
+    target_ip, target_port = get_or_create_client_tunnel(
+        server_ip, port, secure, password
+    )
     result = subprocess.run(
         [
             "sudo",
             "usbip",
             "--tcp-port",
-            str(port),
+            str(target_port),
             "list",
-            "--remote=" + server_ip,
+            "--remote=" + target_ip,
         ],
         capture_output=True,
         text=True,
@@ -253,16 +363,25 @@ def list_attached_usb() -> List[Tuple[str, int, str, str, str]]:
     return parse_attached_list(result.stdout)
 
 
-def attach_remote_usb(server_ip: str, bus_id: str, port: int = 3240):
+def attach_remote_usb(
+    server_ip: str,
+    bus_id: str,
+    port: int = 3240,
+    secure: bool = False,
+    password: str = "",
+):
     """Execute usbip to attach a remote device by bus ID."""
+    target_ip, target_port = get_or_create_client_tunnel(
+        server_ip, port, secure, password
+    )
     result = subprocess.run(
         [
             "sudo",
             "usbip",
             "--tcp-port",
-            str(port),
+            str(target_port),
             "attach",
-            "--remote=" + server_ip,
+            "--remote=" + target_ip,
             "--busid=" + bus_id,
         ],
         capture_output=True,
@@ -290,7 +409,10 @@ def detach_remote_usb(port: int):
 
 
 class ToolTip:
+    """A simple tooltip widget for Tkinter."""
+
     def __init__(self, widget: tk.Widget, text: str):
+        """Initialize the tooltip with a target widget and text."""
         self.widget = widget
         self.text = text
         self.tooltip_window = None
@@ -298,6 +420,7 @@ class ToolTip:
         self.widget.bind("<Leave>", self.hide_tooltip)
 
     def show_tooltip(self, event: Optional[tk.Event] = None):
+        """Display the tooltip on the screen."""
         if self.tooltip_window or not self.text:
             return
         x = self.widget.winfo_rootx() + 25
@@ -319,13 +442,17 @@ class ToolTip:
         label.pack(ipadx=5, ipady=3)
 
     def hide_tooltip(self, event: Optional[tk.Event] = None):
+        """Hide and destroy the tooltip window."""
         if self.tooltip_window:
             self.tooltip_window.destroy()
             self.tooltip_window = None
 
 
 class UsbIpGui:
+    """Main application class for the USB/IP GUI."""
+
     def __init__(self, root: Tk):
+        """Initialize the main GUI components."""
         self.root = root
         self.root.wm_title(_("USB/IP Peer"))
         self.root.geometry(DEFAULT_GEOMETRY)
@@ -346,6 +473,16 @@ class UsbIpGui:
         self.remote_ip_input.insert(0, "127.0.0.1")
         self.remote_port_input = Entry(self.remote_control_frame, width=6)
         self.remote_port_input.insert(0, str(USBIPD_PORT))
+        self.remote_secure_var = BooleanVar(value=False)
+        self.remote_secure_checkbox = Checkbutton(
+            self.remote_control_frame,
+            text=_("Secure"),
+            variable=self.remote_secure_var,
+        )
+        self.remote_password_input = Entry(
+            self.remote_control_frame, width=15, show="*"
+        )
+
         self.remote_list_refresh_button = Button(
             self.remote_control_frame,
             text=_("Refresh"),
@@ -386,8 +523,10 @@ class UsbIpGui:
         self.remote_list_label.grid(column=0, row=0, padx=10)
         self.remote_ip_input.grid(column=1, row=0, padx=10)
         self.remote_port_input.grid(column=2, row=0, padx=10)
-        self.remote_list_refresh_button.grid(column=3, row=0, padx=10)
-        self.remote_list_attach_button.grid(column=4, row=0, padx=10)
+        self.remote_secure_checkbox.grid(column=3, row=0, padx=5)
+        self.remote_password_input.grid(column=4, row=0, padx=5)
+        self.remote_list_refresh_button.grid(column=5, row=0, padx=10)
+        self.remote_list_attach_button.grid(column=6, row=0, padx=10)
 
         self.remote_control_frame.grid(
             column=0, row=2, sticky="ew", pady=(10, 0)
@@ -406,6 +545,16 @@ class UsbIpGui:
         )
         self.local_port_input = Entry(self.local_control_frame, width=6)
         self.local_port_input.insert(0, str(USBIPD_PORT))
+        self.local_secure_var = BooleanVar(value=False)
+        self.local_secure_checkbox = Checkbutton(
+            self.local_control_frame,
+            text=_("Secure"),
+            variable=self.local_secure_var,
+        )
+        self.local_password_input = Entry(
+            self.local_control_frame, width=15, show="*"
+        )
+
         self.local_server_restart_button = Button(
             self.local_control_frame,
             text=_("Apply Port & Restart"),
@@ -455,10 +604,12 @@ class UsbIpGui:
         self.local_list_label.grid(column=0, row=0, padx=10)
         self.local_port_label.grid(column=1, row=0, padx=(10, 0))
         self.local_port_input.grid(column=2, row=0, padx=(0, 10))
-        self.local_server_restart_button.grid(column=3, row=0, padx=10)
-        self.local_list_refresh_button.grid(column=4, row=0, padx=10)
-        self.local_list_bind_button.grid(column=5, row=0, padx=10)
-        self.local_list_unbind_button.grid(column=6, row=0, padx=10)
+        self.local_secure_checkbox.grid(column=3, row=0, padx=5)
+        self.local_password_input.grid(column=4, row=0, padx=5)
+        self.local_server_restart_button.grid(column=5, row=0, padx=10)
+        self.local_list_refresh_button.grid(column=6, row=0, padx=10)
+        self.local_list_bind_button.grid(column=7, row=0, padx=10)
+        self.local_list_unbind_button.grid(column=8, row=0, padx=10)
 
         self.lang_button = Button(
             self.local_control_frame,
@@ -466,8 +617,8 @@ class UsbIpGui:
             command=self.toggle_language,
         )
         ToolTip(self.lang_button, _("lang_toggle_tooltip"))
-        self.local_control_frame.columnconfigure(7, weight=1)
-        self.lang_button.grid(column=7, row=0, padx=10, sticky="e")
+        self.local_control_frame.columnconfigure(9, weight=1)
+        self.lang_button.grid(column=9, row=0, padx=10, sticky="e")
 
         self.local_control_frame.grid(
             column=0, row=0, sticky="ew", pady=(10, 0)
@@ -544,7 +695,14 @@ class UsbIpGui:
         except ValueError:
             messagebox.showerror(_("Error"), _("Invalid port number"))
             return
-        init_usbip_server(port)
+        secure = self.local_secure_var.get()
+        password = self.local_password_input.get()
+        if secure and not password:
+            messagebox.showerror(
+                _("Error"), _("Password required for secure connection")
+            )
+            return
+        init_usbip_server(port, secure, password)
 
     def refresh_remote(self):
         """Refresh remote devices listbox with the given server IP."""
@@ -554,7 +712,14 @@ class UsbIpGui:
         except ValueError:
             messagebox.showerror(_("Error"), _("Invalid port number"))
             return
-        remote_devices = list_remote_usb(server_ip, port)
+        secure = self.remote_secure_var.get()
+        password = self.remote_password_input.get()
+        if secure and not password:
+            messagebox.showerror(
+                _("Error"), _("Password required for secure connection")
+            )
+            return
+        remote_devices = list_remote_usb(server_ip, port, secure, password)
         self.remote_listbox.delete(*self.remote_listbox.get_children())
         for device in remote_devices:
             self.remote_listbox.insert("", "end", values=device)
@@ -616,13 +781,22 @@ class UsbIpGui:
             print(_("no selection to attach"))
             messagebox.showerror(_("Error"), _("no selection to attach"))
             return
+
+        secure = self.remote_secure_var.get()
+        password = self.remote_password_input.get()
+        if secure and not password:
+            messagebox.showerror(
+                _("Error"), _("Password required for secure connection")
+            )
+            return
+
         print(server_ip)
         print(selection[0])
         print(selection)
         print(self.remote_listbox.item(selection[0]))
         bus_id = self.remote_listbox.item(selection[0])["values"][0]
         print(bus_id)
-        result = attach_remote_usb(server_ip, bus_id, port)
+        result = attach_remote_usb(server_ip, bus_id, port, secure, password)
         print(result.returncode)
         # if result.returncode == 0:
         #     attached_devices[bus_id] = {
