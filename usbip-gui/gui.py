@@ -398,10 +398,10 @@ class UsbIpGui:
         self.lang_button.grid(column=5, row=0, padx=10, sticky="e")
 
         self.remote_control_frame.grid(
-            column=0, row=0, sticky="ew", pady=(10, 0)
+            column=0, row=2, sticky="ew", pady=(10, 0)
         )
         self.remote_list_frame.grid(
-            column=0, row=1, sticky="nsew", padx=10, pady=10
+            column=0, row=3, sticky="nsew", padx=10, pady=10
         )
 
         # Local devices
@@ -469,10 +469,10 @@ class UsbIpGui:
         self.local_list_unbind_button.grid(column=6, row=0, padx=10)
 
         self.local_control_frame.grid(
-            column=0, row=2, sticky="ew", pady=(10, 0)
+            column=0, row=0, sticky="ew", pady=(10, 0)
         )
         self.local_list_frame.grid(
-            column=0, row=3, sticky="nsew", padx=10, pady=10
+            column=0, row=1, sticky="nsew", padx=10, pady=10
         )
 
         # Attached devices
