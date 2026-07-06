@@ -57,20 +57,28 @@ ATTACHED_COLUMN_WIDTHS = [21, 3, 8, 20, 50]
 USBIPD_PORT = 3240
 DEFAULT_GEOMETRY = "1300x842"
 
-ssl_server_process: Optional[subprocess.Popen[bytes]] = None
-ssl_client_processes: Dict[
-    Tuple[str, int], Tuple[int, subprocess.Popen[bytes], str]
-] = {}
+
+class TunnelState:
+    """Holds state for background proxy processes."""
+
+    def __init__(self):
+        self.server_process: Optional[subprocess.Popen[bytes]] = None
+        self.client_processes: Dict[
+            Tuple[str, int], Tuple[int, subprocess.Popen[bytes], str]
+        ] = {}
+
+
+tunnel_state = TunnelState()
 
 
 def cleanup_tunnels():
     """Terminate any background SSL tunnel processes."""
-    if ssl_server_process:
+    if tunnel_state.server_process:
         try:
-            ssl_server_process.terminate()
+            tunnel_state.server_process.terminate()
         except OSError:
             pass
-    for _local_port, proc in ssl_client_processes.values():
+    for _port, proc, _pwd in tunnel_state.client_processes.values():
         try:
             proc.terminate()
         except OSError:
@@ -88,18 +96,20 @@ def init_kernel_modules():
 
 
 def init_usbip_server(
-    port: int = 3240, secure: bool = False, password: str = ""
+    port: int = 3240,
+    secure: bool = False,
+    password: str = "",
+    bind_host: str = "127.0.0.1",
 ):
     """Initialize and start the usbipd server daemon."""
-    global ssl_server_process
     subprocess.run(["sudo", "pkill", "usbipd"], check=False)
-    if ssl_server_process:
+    if tunnel_state.server_process:
         try:
-            ssl_server_process.terminate()
-            ssl_server_process.wait()
+            tunnel_state.server_process.terminate()
+            tunnel_state.server_process.wait()
         except OSError:
             pass
-        ssl_server_process = None
+        tunnel_state.server_process = None
 
     if secure:
         target_port = port + 10000
@@ -107,7 +117,7 @@ def init_usbip_server(
             ["sudo", "usbipd", "-D", "--tcp-port", str(target_port)],
             check=False,
         )
-        ssl_server_process = subprocess.Popen(
+        tunnel_state.server_process = subprocess.Popen(
             [
                 sys.executable,
                 os.path.join(os.path.dirname(__file__), "ssl_tunnel.py"),
@@ -116,6 +126,8 @@ def init_usbip_server(
                 str(port),
                 "--target-port",
                 str(target_port),
+                "--bind-host",
+                bind_host,
                 "--password",
                 password,
             ]
@@ -273,7 +285,8 @@ def get_or_create_client_tunnel(
 
     Returns:
         tuple: (target_ip, target_port) pointing to the local tunnel if secure,
-               otherwise returns the original host and port. Returns ("", 0) on abort.
+               otherwise returns the original host and port.
+               Returns ("", 0) on abort.
     """
     if not secure:
         return host, port
@@ -292,32 +305,37 @@ def get_or_create_client_tunnel(
         with socket.create_connection((host, port)) as sock:
             with context.wrap_socket(sock, server_hostname=host) as ssock:
                 cert_der = ssock.getpeercert(binary_form=True)
-                
+
         if not cert_der:
             raise ValueError("No certificate provided by server")
-            
-        fingerprint = hashlib.sha256(cert_der).hexdigest()
-        fingerprint = ":".join(fingerprint[i:i+2] for i in range(0, len(fingerprint), 2)).upper()
-        
-        known_hosts_path = os.path.expanduser("~/.config/usbip-gui/known_hosts.json")
+
+        fingerprint = hashlib.sha256(cert_der).hexdigest().upper()
+        it = iter(fingerprint)
+        fingerprint = ":".join(a + b for a, b in zip(it, it))
+
+        known_hosts_path = os.path.expanduser(
+            "~/.config/usbip-gui/known_hosts.json"
+        )
         known_hosts = {}
         if os.path.exists(known_hosts_path):
-            with open(known_hosts_path, "r") as f:
+            with open(known_hosts_path, "r", encoding="utf-8") as f:
                 known_hosts = json.load(f)
-                
+
         host_key = f"{host}:{port}"
         if host_key not in known_hosts or known_hosts[host_key] != fingerprint:
-            msg = _("The server's certificate fingerprint is:\n\n{}\n\nDo you want to accept this connection?").format(fingerprint)
+            msg = _("cert_fingerprint_msg").format(fingerprint)
             if messagebox.askyesno(_("Certificate Check"), msg):
                 known_hosts[host_key] = fingerprint
                 os.makedirs(os.path.dirname(known_hosts_path), exist_ok=True)
-                with open(known_hosts_path, "w") as f:
+                with open(known_hosts_path, "w", encoding="utf-8") as f:
                     json.dump(known_hosts, f)
             else:
                 return "", 0
 
         if not password:
-            messagebox.showerror(_("Error"), _("Password required for secure connection"))
+            messagebox.showerror(
+                _("Error"), _("Password required for secure connection")
+            )
             return "", 0
 
         # Now that the fingerprint is trusted, verify the password
@@ -326,26 +344,37 @@ def get_or_create_client_tunnel(
                 test_cert_der = ssock.getpeercert(binary_form=True)
                 if test_cert_der:
                     test_fp = hashlib.sha256(test_cert_der).hexdigest().upper()
-                    test_fp = ":".join(test_fp[i:i+2] for i in range(0, len(test_fp), 2))
+                    it = iter(test_fp)
+                    test_fp = ":".join(a + b for a, b in zip(it, it))
                     if test_fp != fingerprint:
-                        raise ValueError("Fingerprint mismatch during auth check")
-                        
+                        raise ValueError(
+                            "Fingerprint mismatch during auth check"
+                        )
+
                 pwd_bytes = password.encode("utf-8")
                 pwd_len = len(pwd_bytes)
                 ssock.sendall(pwd_len.to_bytes(4, byteorder="big") + pwd_bytes)
-                
+
                 response = ssock.recv(1)
                 if response != b"\x01":
-                    messagebox.showerror(_("Error"), _("Authentication failed. Please check your password."))
+                    messagebox.showerror(
+                        _("Error"),
+                        _(
+                            "Authentication failed. "
+                            "Please check your password."
+                        ),
+                    )
                     return "", 0
 
     except Exception as e:
-        messagebox.showerror(_("Error"), _(f"Failed to check certificate: {e}"))
+        messagebox.showerror(
+            _("Error"), _(f"Failed to check certificate: {e}")
+        )
         return "", 0
 
     key = (host, port)
-    if key in ssl_client_processes:
-        local_port, proc, cached_password = ssl_client_processes[key]
+    if key in tunnel_state.client_processes:
+        local_port, proc, cached_password = tunnel_state.client_processes[key]
         if proc.poll() is None:
             if cached_password == password:
                 return "127.0.0.1", local_port
@@ -371,7 +400,7 @@ def get_or_create_client_tunnel(
             fingerprint,
         ]
     )
-    ssl_client_processes[key] = (local_port, proc, password)
+    tunnel_state.client_processes[key] = (local_port, proc, password)
     time.sleep(1)  # Give tunnel time to start
     return "127.0.0.1", local_port
 
@@ -449,7 +478,9 @@ def attach_remote_usb(
         server_ip, port, secure, password
     )
     if not target_ip:
-        return subprocess.CompletedProcess(args=[], returncode=-1, stdout="", stderr="")
+        return subprocess.CompletedProcess(
+            args=[], returncode=-1, stdout="", stderr=""
+        )
     result = subprocess.run(
         [
             "sudo",
@@ -554,7 +585,7 @@ class UsbIpGui:
             self.remote_control_frame,
             text=_("Secure"),
             variable=self.remote_secure_var,
-            command=lambda: self.check_secure_warning(self.remote_secure_var)
+            command=lambda: self.check_secure_warning(self.remote_secure_var),
         )
         self.remote_password_input = Entry(
             self.remote_control_frame, width=15, show="*"
@@ -627,7 +658,7 @@ class UsbIpGui:
             self.local_control_frame,
             text=_("Secure"),
             variable=self.local_secure_var,
-            command=lambda: self.check_secure_warning(self.local_secure_var)
+            command=lambda: self.check_secure_warning(self.local_secure_var),
         )
         self.local_password_input = Entry(
             self.local_control_frame, width=15, show="*"
@@ -662,7 +693,6 @@ class UsbIpGui:
         )
         ToolTip(self.local_list_unbind_button, _("local_unbind_tooltip"))
 
-        
         self.local_show_fingerprint_button = Button(
             self.local_control_frame,
             text=_("Show Fingerprint"),
@@ -694,17 +724,31 @@ class UsbIpGui:
         for device in local_devices:
             self.local_listbox.insert("", "end", values=device)
 
+        self.local_bind_ip_label = Label(
+            self.local_control_frame, text=_("Bind IP")
+        )
+        self.local_bind_ip_input = Entry(self.local_control_frame, width=12)
+        self.local_bind_ip_input.insert(0, "127.0.0.1")
+
         self.local_list_label.grid(column=0, row=0, padx=10)
         self.local_port_label.grid(column=1, row=0, padx=(10, 0), sticky="e")
         self.local_port_input.grid(column=2, row=0, padx=(0, 10), sticky="w")
-        self.local_secure_checkbox.grid(column=3, row=0, padx=5)
-        self.local_password_input.grid(column=4, row=0, padx=5)
-        self.local_server_restart_button.grid(column=5, row=0, padx=10)
-        self.local_show_fingerprint_button.grid(column=6, row=0, padx=10)
-        self.local_regen_cert_button.grid(column=7, row=0, padx=10)
+        self.local_bind_ip_label.grid(
+            column=3, row=0, padx=(10, 0), sticky="e"
+        )
+        self.local_bind_ip_input.grid(
+            column=4, row=0, padx=(0, 10), sticky="w"
+        )
+        self.local_secure_checkbox.grid(column=5, row=0, padx=5)
+        self.local_password_input.grid(column=6, row=0, padx=5)
+        self.local_server_restart_button.grid(column=7, row=0, padx=10)
+        self.local_show_fingerprint_button.grid(column=8, row=0, padx=10)
+        self.local_regen_cert_button.grid(column=9, row=0, padx=10)
 
         # Row 1: Actions (placed below Port, left justified)
-        self.local_actions_frame.grid(column=1, row=1, columnspan=7, sticky="w", pady=(5, 0))
+        self.local_actions_frame.grid(
+            column=1, row=1, columnspan=9, sticky="w", pady=(5, 0)
+        )
 
         self.local_list_refresh_button.grid(column=0, row=0, padx=(10, 5))
         self.local_list_bind_button.grid(column=1, row=0, padx=5)
@@ -783,30 +827,41 @@ class UsbIpGui:
     def check_secure_warning(self, var: BooleanVar):
         if not var.get():
             messagebox.showwarning(
-                _("Warning"), 
-                _("Disabling Secure mode is not recommended over the internet.")
+                _("Warning"),
+                _(
+                    "Disabling Secure mode is not recommended "
+                    "over the internet."
+                ),
             )
 
     def show_fingerprint(self):
         try:
             import ssl_tunnel
+
             cert_path, _key_path = ssl_tunnel.get_cert_paths()
             fp = ssl_tunnel.get_cert_fingerprint(cert_path)
             messagebox.showinfo(_("Certificate Fingerprint"), fp)
         except Exception as e:
             messagebox.showerror(_("Error"), str(e))
-            
+
     def regenerate_cert(self):
         try:
             import ssl_tunnel
             import os
+
             cert_path, key_path = ssl_tunnel.get_cert_paths()
             if os.path.exists(cert_path):
                 os.remove(cert_path)
             if os.path.exists(key_path):
                 os.remove(key_path)
             ssl_tunnel.generate_self_signed_cert(cert_path, key_path)
-            messagebox.showinfo(_("Success"), _("Certificate regenerated successfully. Please restart the server."))
+            messagebox.showinfo(
+                _("Success"),
+                _(
+                    "Certificate regenerated successfully. "
+                    "Please restart the server."
+                ),
+            )
         except Exception as e:
             messagebox.showerror(_("Error"), str(e))
 
@@ -831,7 +886,8 @@ class UsbIpGui:
                 _("Error"), _("Password required for secure connection")
             )
             return
-        init_usbip_server(port, secure, password)
+        bind_host = self.local_bind_ip_input.get().strip() or "127.0.0.1"
+        init_usbip_server(port, secure, password, bind_host)
 
     def refresh_remote(self):
         """Refresh remote devices listbox with the given server IP."""
