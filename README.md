@@ -98,7 +98,7 @@ To securely share a USB device across the internet:
   new features.
 - [x] reducing/eliminating global variable usage
 - [x] Add SSL/SSH encryption feature.
-- [ ] Move code into modules, i.e. compartmentalize sections of the guy.py.
+- [ ] Move code into modules, i.e. compartmentalize sections of the gui.py.
 - [ ] Cross-architecture (ARM and x86) production testing.
 - [ ] Look at K-Francis-H's remaining TODOs.
 
