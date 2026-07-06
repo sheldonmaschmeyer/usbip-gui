@@ -14,6 +14,47 @@ checks makes it unreliable. Since `usbip` is fully open-source and free of
 licensing restrictions, this fork seeks to provide a simplified, faster, and
 more dependable secure USB sharing experience.
 
+## Docker
+
+I prefer using Docker rather than integrating directly onto the host system to
+keep the environment completely isolated. This avoids installing system-wide
+dependencies on your machine (like `python3-tkinter`, `meson`, etc.). Because
+Docker provides a consistent, reproducible, and clean environment without
+complex setup steps, it is ideal for both development and production.
+
+To open an interactive shell inside the Docker container:
+
+```zsh
+docker compose -f ./docker-compose.yml run usbip-gui /bin/zsh
+```
+
+Once inside the container, you can run the application using `pixi`:
+
+```zsh
+pixi run usbip
+```
+
+Alternatively, to start the application directly without an interactive shell, use:
+
+```zsh
+docker compose -f ./docker-compose.yml up usbip-gui
+```
+
+## Translations
+
+If you make changes to the English or French translations in the `.po` files
+(`po/en.po` or `po/fr_CA.po`), you will need to compile them into `.mo` files
+for the changes to take effect in the application.
+
+Run the following commands from the root directory to compile the `.po` files
+into the `share/locale` directory:
+
+```zsh
+mkdir -p share/locale/en/LC_MESSAGES share/locale/fr_CA/LC_MESSAGES
+msgfmt po/en.po -o share/locale/en/LC_MESSAGES/usbip-gui.mo
+msgfmt po/fr_CA.po -o share/locale/fr_CA/LC_MESSAGES/usbip-gui.mo
+```
+
 ## Tasks
 
 - [x] Dockerize and configure a comfortable coding environment.
