@@ -351,7 +351,10 @@ class UsbIpGui:
         # Local devices
         self.local_control_frame = Frame(self.root)
         self.local_list_label = Label(
-            self.local_control_frame, text=_("Local USB Devices (Port: )")
+            self.local_control_frame, text=_("Local USB Devices")
+        )
+        self.local_port_label = Label(
+            self.local_control_frame, text=_("Port ")
         )
         self.local_port_input = Entry(self.local_control_frame, width=6)
         self.local_port_input.insert(0, str(USBIPD_PORT))
@@ -400,11 +403,12 @@ class UsbIpGui:
             self.local_listbox.insert("", "end", values=device)
 
         self.local_list_label.grid(column=0, row=0, padx=10)
-        self.local_port_input.grid(column=1, row=0, padx=10)
-        self.local_server_restart_button.grid(column=2, row=0, padx=10)
-        self.local_list_refresh_button.grid(column=3, row=0, padx=10)
-        self.local_list_bind_button.grid(column=4, row=0, padx=10)
-        self.local_list_unbind_button.grid(column=5, row=0, padx=10)
+        self.local_port_label.grid(column=1, row=0, padx=(10, 0))
+        self.local_port_input.grid(column=2, row=0, padx=(0, 10))
+        self.local_server_restart_button.grid(column=3, row=0, padx=10)
+        self.local_list_refresh_button.grid(column=4, row=0, padx=10)
+        self.local_list_bind_button.grid(column=5, row=0, padx=10)
+        self.local_list_unbind_button.grid(column=6, row=0, padx=10)
 
         self.local_control_frame.grid(
             column=0, row=2, sticky="ew", pady=(10, 0)
@@ -516,7 +520,7 @@ class UsbIpGui:
         result = bind_local_usb(bus_id)
         if result.returncode == 0:
             print(bus_id + _(" bound successfully"))
-        
+
         time.sleep(0.5)
         self.refresh_local()
 
@@ -533,7 +537,7 @@ class UsbIpGui:
         result = unbind_local_usb(bus_id)
         if result.returncode == 0:
             print(bus_id + _(" unbound successfully"))
-            
+
         time.sleep(0.5)
         self.refresh_local()
 
