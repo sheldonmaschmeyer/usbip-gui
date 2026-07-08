@@ -1,6 +1,6 @@
 """Client tab implementation for managing remote USB device connections."""
 
-from tkinter import BooleanVar, Widget
+from tkinter import BooleanVar, Widget, Event
 from tkinter.ttk import (
     Frame,
     Label,
@@ -338,6 +338,8 @@ class ClientTab:
         for col in DEVICE_COLUMNS:
             self.remote_listbox.heading(col, text=col)
 
+        self.remote_listbox.bind("<Double-1>", self.on_double_click_remote)
+
         remote_devices = list_remote_usb("127.0.0.1", USBIPD_PORT)
         for device in remote_devices:
             self.remote_listbox.insert("", "end", values=device)
@@ -395,6 +397,8 @@ class ClientTab:
 
         for col in ATTACHED_COLUMNS:
             self.attached_listbox.heading(col, text=col)
+
+        self.attached_listbox.bind("<Double-1>", self.on_double_click_attached)
 
         attached_devices = list_attached_usb()
         for attached_device in attached_devices:
@@ -472,3 +476,13 @@ class ClientTab:
         time.sleep(0.5)
         self.refresh_remote()
         self.refresh_attached()
+
+    def on_double_click_remote(self, _event: Event) -> None:
+        """Attach remote usb on double click."""
+        if self.remote_listbox.selection():
+            self.attach_remote()
+
+    def on_double_click_attached(self, _event: Event) -> None:
+        """Detach remote usb on double click."""
+        if self.attached_listbox.selection():
+            self.detach_remote()
