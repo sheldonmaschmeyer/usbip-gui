@@ -1,0 +1,30 @@
+graph LR
+    classDef proxy fill:#f9f,stroke:#333,stroke-width:2px;
+    classDef daemon fill:#bbf,stroke:#333,stroke-width:2px;
+    classDef gui fill:#dfd,stroke:#333,stroke-width:2px;
+    classDef device fill:#fbb,stroke:#333,stroke-width:2px;
+
+    subgraph Client ["Client Machine (Local)"]
+        direction TB
+        CGUI("usbip-gui (GUI)"):::gui
+        CUSB("usbip client (CLI)"):::daemon
+        CProxy["SSL Client Proxy\n(ssl_tunnel.py)"]:::proxy
+        
+        CGUI -.->|"Starts & Manages"| CProxy
+        CGUI -.->|"Executes 'attach' & 'list'"| CUSB
+        CUSB <--->|"Local Forwarding\n(e.g., Port 45864)"| CProxy
+    end
+
+    subgraph Server ["Server Machine (Host)"]
+        direction TB
+        SProxy["SSL Server Proxy\n(ssl_tunnel.py)"]:::proxy
+        SUSB("usbipd daemon"):::daemon
+        SGUI("usbip-gui (GUI)"):::gui
+        Devices(("USB Devices")):::device
+
+        SGUI -.->|"Starts & Configures\n(Generates SSL Cert)"| SProxy
+        SProxy <--->|"Unencrypted Local Forwarding\n(Internal Port 13240)"| SUSB
+        SUSB <--->|"Shares"| Devices
+    end
+
+    CProxy <==>|"Encrypted SSL Tunnel\n(External Port 3240)\nPassword Authenticated"| SProxy

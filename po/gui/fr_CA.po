@@ -1,0 +1,26 @@
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: usbip-gui\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2024-12-06 14:18+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: French (Canada)\n"
+"Language: fr_CA\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: usbip-gui/gui.py:336
+msgid "USB/IP Peer"
+msgstr "Pair USB/IP"
+
+msgid "Server (Local USB Devices)"
+msgstr "Serveur (Périphériques USB Locaux)"
+
+msgid "Client (Remote USB Devices)"
+msgstr "Client (Périphériques USB Distants)"
+
+msgid "USB/IP Manager"
+msgstr "Gestionnaire USB/IP"
