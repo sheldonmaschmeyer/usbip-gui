@@ -21,13 +21,13 @@ from typing import List, Tuple
 from .. import ssl_tunnel
 from .common import get_translator, USBIPD_PORT, tunnel_state, ToolTip
 
-_ = get_translator("server")
+t = get_translator("server")
 
 LOCAL_DEVICE_COLUMNS = [
-    _("Bus ID"),
-    _("State"),
-    _("Manufacturer"),
-    _("Description"),
+    t("Bus ID"),
+    t("State"),
+    t("Manufacturer"),
+    t("Description"),
 ]
 
 
@@ -101,13 +101,13 @@ def parse_local_list(text: str) -> List[Tuple[str, str, str, str]]:
         manufacturer = man_info[0] if len(man_info) > 0 else ""
         description = ":".join(man_info[1:]) if len(man_info) > 1 else ""
 
-        state = _("Unbound")
+        state = t("Unbound")
         if bus_id:
             driver_path = f"/sys/bus/usb/devices/{bus_id}/driver"
             if os.path.exists(driver_path) and os.path.islink(driver_path):
                 driver = os.path.basename(os.readlink(driver_path))
                 if driver == "usbip-host":
-                    state = _("Bound")
+                    state = t("Bound")
 
         rows.append((bus_id, state, manufacturer, description))
     return rows
@@ -162,17 +162,17 @@ class ServerTab:
 
         self.local_control_frame = Frame(self.frame)
         self.local_list_label = Label(
-            self.local_control_frame, text=_("Local USB Devices")
+            self.local_control_frame, text=t("Local USB Devices")
         )
         self.local_port_label = Label(
-            self.local_control_frame, text=_("Port ")
+            self.local_control_frame, text=t("Port ")
         )
         self.local_port_input = Entry(self.local_control_frame, width=6)
         self.local_port_input.insert(0, str(USBIPD_PORT))
         self.local_secure_var = BooleanVar(value=True)
         self.local_secure_checkbox = Checkbutton(
             self.local_control_frame,
-            text=_("Secure"),
+            text=t("Secure"),
             variable=self.local_secure_var,
             command=lambda: self.check_secure_warning(self.local_secure_var),
         )
@@ -182,41 +182,41 @@ class ServerTab:
 
         self.local_server_restart_button = Button(
             self.local_control_frame,
-            text=_("Apply Port & Restart"),
+            text=t("Apply Port & Restart"),
             command=self.restart_server,
         )
-        ToolTip(self.local_server_restart_button, _("local_restart_tooltip"))
+        ToolTip(self.local_server_restart_button, t("local_restart_tooltip"))
         self.local_port_input.bind("<Return>", lambda e: self.restart_server())
 
         self.local_actions_frame = Frame(self.local_control_frame)
 
         self.local_list_refresh_button = Button(
             self.local_actions_frame,
-            text=_("Refresh"),
+            text=t("Refresh"),
             command=self.refresh_local,
         )
-        ToolTip(self.local_list_refresh_button, _("local_refresh_tooltip"))
+        ToolTip(self.local_list_refresh_button, t("local_refresh_tooltip"))
         self.local_list_bind_button = Button(
             self.local_actions_frame,
-            text=_("Bind Device"),
+            text=t("Bind Device"),
             command=self.bind_local,
         )
-        ToolTip(self.local_list_bind_button, _("local_bind_tooltip"))
+        ToolTip(self.local_list_bind_button, t("local_bind_tooltip"))
         self.local_list_unbind_button = Button(
             self.local_actions_frame,
-            text=_("Unbind Device"),
+            text=t("Unbind Device"),
             command=self.unbind_local,
         )
-        ToolTip(self.local_list_unbind_button, _("local_unbind_tooltip"))
+        ToolTip(self.local_list_unbind_button, t("local_unbind_tooltip"))
 
         self.local_show_fingerprint_button = Button(
             self.local_control_frame,
-            text=_("Show Fingerprint"),
+            text=t("Show Fingerprint"),
             command=self.show_fingerprint,
         )
         self.local_regen_cert_button = Button(
             self.local_control_frame,
-            text=_("Regen Cert"),
+            text=t("Regen Cert"),
             command=self.regenerate_cert,
         )
 
@@ -240,7 +240,7 @@ class ServerTab:
             self.local_listbox.insert("", "end", values=device)
 
         self.local_bind_ip_label = Label(
-            self.local_control_frame, text=_("Bind IP")
+            self.local_control_frame, text=t("Bind IP")
         )
         self.local_bind_ip_input = Entry(self.local_control_frame, width=12)
         self.local_bind_ip_input.insert(0, "127.0.0.1")
@@ -277,16 +277,16 @@ class ServerTab:
     def check_secure_warning(self, var: BooleanVar):
         """Check secure warning."""
         if not var.get():
-            messagebox.showwarning(_("Warning"), _("insecure_warning_msg"))
+            messagebox.showwarning(t("Warning"), t("insecure_warning_msg"))
 
     def show_fingerprint(self):
         """Show fingerprint."""
         try:
             cert_path, _key_path = ssl_tunnel.get_cert_paths()
             fp = ssl_tunnel.get_cert_fingerprint(cert_path)
-            messagebox.showinfo(_("Certificate Fingerprint"), fp)
+            messagebox.showinfo(t("Certificate Fingerprint"), fp)
         except OSError as e:
-            messagebox.showerror(_("Error"), str(e))
+            messagebox.showerror(t("Error"), str(e))
 
     def regenerate_cert(self):
         """Regenerate cert."""
@@ -297,9 +297,9 @@ class ServerTab:
             if os.path.exists(key_path):
                 os.remove(key_path)
             ssl_tunnel.generate_self_signed_cert(cert_path, key_path)
-            messagebox.showinfo(_("Success"), _("cert_regen"))
+            messagebox.showinfo(t("Success"), t("cert_regen"))
         except OSError as e:
-            messagebox.showerror(_("Error"), str(e))
+            messagebox.showerror(t("Error"), str(e))
 
     def refresh_local(self):
         """Refresh local."""
@@ -313,13 +313,13 @@ class ServerTab:
         try:
             port = int(self.local_port_input.get())
         except ValueError:
-            messagebox.showerror(_("Error"), _("Invalid port number"))
+            messagebox.showerror(t("Error"), t("Invalid port number"))
             return
         secure = self.local_secure_var.get()
         password = self.local_password_input.get()
         if secure and not password:
             messagebox.showerror(
-                _("Error"), _("Password required for secure connection")
+                t("Error"), t("Password required for secure connection")
             )
             return
         bind_host = self.local_bind_ip_input.get().strip() or "127.0.0.1"
@@ -329,7 +329,7 @@ class ServerTab:
         """Bind local."""
         selection = self.local_listbox.selection()
         if not selection:
-            messagebox.showerror(_("Error"), _("no selection to bind"))
+            messagebox.showerror(t("Error"), t("no selection to bind"))
             return
         bus_id = self.local_listbox.item(selection[0])["values"][0]
         bind_local_usb(str(bus_id))
@@ -340,7 +340,7 @@ class ServerTab:
         """Unbind local."""
         selection = self.local_listbox.selection()
         if not selection:
-            messagebox.showerror(_("Error"), _("no selection to unbind"))
+            messagebox.showerror(t("Error"), t("no selection to unbind"))
             return
         bus_id = self.local_listbox.item(selection[0])["values"][0]
         unbind_local_usb(str(bus_id))

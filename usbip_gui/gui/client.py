@@ -27,15 +27,15 @@ from urllib.parse import urlparse
 
 from .common import get_translator, USBIPD_PORT, tunnel_state, ToolTip
 
-_ = get_translator("client")
+t = get_translator("client")
 
-DEVICE_COLUMNS = [_("Bus ID"), _("Manufacturer"), _("Description")]
+DEVICE_COLUMNS = [t("Bus ID"), t("Manufacturer"), t("Description")]
 ATTACHED_COLUMNS = [
-    _("Host"),
-    _("Port"),
-    _("Bus ID"),
-    _("Manufacturer"),
-    _("Description"),
+    t("Host"),
+    t("Port"),
+    t("Bus ID"),
+    t("Manufacturer"),
+    t("Description"),
 ]
 
 
@@ -119,8 +119,8 @@ def get_or_create_client_tunnel(
 
         host_key = f"{host}:{port}"
         if host_key not in known_hosts or known_hosts[host_key] != fingerprint:
-            msg = _("cert_fingerprint_msg").format(fingerprint)
-            if messagebox.askyesno(_("Certificate Check"), msg):
+            msg = t("cert_fingerprint_msg").format(fingerprint)
+            if messagebox.askyesno(t("Certificate Check"), msg):
                 known_hosts[host_key] = fingerprint
                 os.makedirs(os.path.dirname(known_hosts_path), exist_ok=True)
                 with open(known_hosts_path, "w", encoding="utf-8") as f:
@@ -130,7 +130,7 @@ def get_or_create_client_tunnel(
 
         if not password:
             messagebox.showerror(
-                _("Error"), _("Password required for secure connection")
+                t("Error"), t("Password required for secure connection")
             )
             return "", 0
 
@@ -152,12 +152,12 @@ def get_or_create_client_tunnel(
 
                 response = ssock.recv(1)
                 if response != b"\\x01":
-                    messagebox.showerror(_("Error"), _("auth_failed_msg"))
+                    messagebox.showerror(t("Error"), t("auth_failed_msg"))
                     return "", 0
 
     except (OSError, ValueError) as e:
         messagebox.showerror(
-            _("Error"), _(f"Failed to check certificate: {e}")
+            t("Error"), t(f"Failed to check certificate: {e}")
         )
         return "", 0
 
@@ -289,7 +289,7 @@ class ClientTab:
 
         self.remote_control_frame = Frame(self.frame)
         self.remote_list_label = Label(
-            self.remote_control_frame, text=_("Remote USB Devices for ")
+            self.remote_control_frame, text=t("Remote USB Devices for ")
         )
         self.remote_ip_input = Entry(self.remote_control_frame, width=15)
         self.remote_ip_input.insert(0, "127.0.0.1")
@@ -298,7 +298,7 @@ class ClientTab:
         self.remote_secure_var = BooleanVar(value=True)
         self.remote_secure_checkbox = Checkbutton(
             self.remote_control_frame,
-            text=_("Secure"),
+            text=t("Secure"),
             variable=self.remote_secure_var,
             command=lambda: self.check_secure_warning(self.remote_secure_var),
         )
@@ -308,16 +308,16 @@ class ClientTab:
 
         self.remote_list_refresh_button = Button(
             self.remote_control_frame,
-            text=_("Refresh"),
+            text=t("Refresh"),
             command=self.refresh_remote,
         )
-        ToolTip(self.remote_list_refresh_button, _("remote_refresh_tooltip"))
+        ToolTip(self.remote_list_refresh_button, t("remote_refresh_tooltip"))
         self.remote_list_attach_button = Button(
             self.remote_control_frame,
-            text=_("Attach Device"),
+            text=t("Attach Device"),
             command=self.attach_remote,
         )
-        ToolTip(self.remote_list_attach_button, _("remote_attach_tooltip"))
+        ToolTip(self.remote_list_attach_button, t("remote_attach_tooltip"))
 
         self.remote_list_frame = Frame(self.frame)
         self.remote_scroll = Scrollbar(
@@ -360,22 +360,22 @@ class ClientTab:
         # Attached devices
         self.attached_control_frame = Frame(self.frame)
         self.attached_list_label = Label(
-            self.attached_control_frame, text=_("Attached Devices")
+            self.attached_control_frame, text=t("Attached Devices")
         )
         self.attached_list_refresh_button = Button(
             self.attached_control_frame,
-            text=_("Refresh"),
+            text=t("Refresh"),
             command=self.refresh_attached,
         )
         ToolTip(
-            self.attached_list_refresh_button, _("attached_refresh_tooltip")
+            self.attached_list_refresh_button, t("attached_refresh_tooltip")
         )
         self.detach_button = Button(
             self.attached_control_frame,
-            text=_("Detach Device"),
+            text=t("Detach Device"),
             command=self.detach_remote,
         )
-        ToolTip(self.detach_button, _("attached_detach_tooltip"))
+        ToolTip(self.detach_button, t("attached_detach_tooltip"))
 
         self.attached_list_frame = Frame(self.frame)
         self.attached_scroll = Scrollbar(
@@ -414,7 +414,7 @@ class ClientTab:
     def check_secure_warning(self, var: BooleanVar):
         """Check secure warning."""
         if not var.get():
-            messagebox.showwarning(_("Warning"), _("insecure_warning_msg"))
+            messagebox.showwarning(t("Warning"), t("insecure_warning_msg"))
 
     def refresh_remote(self):
         """Refresh remote."""
@@ -422,7 +422,7 @@ class ClientTab:
         try:
             port = int(self.remote_port_input.get())
         except ValueError:
-            messagebox.showerror(_("Error"), _("Invalid port number"))
+            messagebox.showerror(t("Error"), t("Invalid port number"))
             return
         secure = self.remote_secure_var.get()
         password = self.remote_password_input.get()
@@ -445,11 +445,11 @@ class ClientTab:
         try:
             port = int(self.remote_port_input.get())
         except ValueError:
-            messagebox.showerror(_("Error"), _("Invalid port number"))
+            messagebox.showerror(t("Error"), t("Invalid port number"))
             return
         selection = self.remote_listbox.selection()
         if not selection:
-            messagebox.showerror(_("Error"), _("no selection to attach"))
+            messagebox.showerror(t("Error"), t("no selection to attach"))
             return
 
         secure = self.remote_secure_var.get()
@@ -465,7 +465,7 @@ class ClientTab:
         """Detach remote."""
         selection = self.attached_listbox.selection()
         if not selection:
-            messagebox.showerror(_("Error"), _("no selection to detach"))
+            messagebox.showerror(t("Error"), t("no selection to detach"))
             return
         port = int(self.attached_listbox.item(selection[0])["values"][1])
         detach_remote_usb(port)

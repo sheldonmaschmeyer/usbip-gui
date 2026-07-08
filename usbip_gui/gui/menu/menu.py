@@ -6,7 +6,7 @@ from ..common import get_translator
 from .about import show_about_dialog
 from .language_switcher import toggle_language
 
-_ = get_translator("menu")
+t = get_translator("menu")
 
 
 def create_main_menu(root: tk.Tk | tk.Toplevel):
@@ -36,12 +36,12 @@ def create_main_menu(root: tk.Tk | tk.Toplevel):
         borderwidth=bw,
     )
     filemenu.add_command(
-        label=_("About"), command=lambda: show_about_dialog(root)
+        label=t("About"), command=lambda: show_about_dialog(root)
     )
     filemenu.add_separator()
-    filemenu.add_command(label=_("Close"), command=root.quit)
+    filemenu.add_command(label=t("Close"), command=root.quit)
 
-    menubar.add_cascade(label=_("File"), menu=filemenu)
+    menubar.add_cascade(label=t("File"), menu=filemenu)
 
     # Add Language toggle directly to the menu bar
     menubar.add_command(label="EN / FR", command=toggle_language)
