@@ -151,7 +151,7 @@ def get_or_create_client_tunnel(
                 ssock.sendall(pwd_len.to_bytes(4, byteorder="big") + pwd_bytes)
 
                 response = ssock.recv(1)
-                if response != b"\\x01":
+                if response != b"\x01":
                     messagebox.showerror(t("Error"), t("auth_failed_msg"))
                     return "", 0
 
