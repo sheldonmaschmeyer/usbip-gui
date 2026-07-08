@@ -1,3 +1,5 @@
+"""Module for SSL tunneling."""
+
 import ssl
 import socket
 import threading
@@ -137,8 +139,7 @@ def server_handle_connection(
 
 def client_handle_connection(
     local_socket: socket.socket,
-    remote_host: str,
-    remote_port: int,
+    remote_addr: tuple[str, int],
     password: str,
     context: ssl.SSLContext,
     expected_fingerprint: str = "",
@@ -153,12 +154,12 @@ def client_handle_connection(
     Args:
         local_socket (socket.socket): The accepted local unencrypted
             connection.
-        remote_host (str): The remote SSL server host to connect to.
-        remote_port (int): The remote SSL server port to connect to.
+        remote_addr (tuple[str, int]): Tuple containing remote host and port.
         password (str): The pre-shared password for authentication.
         context (ssl.SSLContext): The SSL context to wrap the remote socket
             with.
     """
+    remote_host, remote_port = remote_addr
     try:
         remote_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         ssl_remote_socket = context.wrap_socket(
@@ -174,7 +175,6 @@ def client_handle_connection(
                     "No certificate provided by server"
                 )
                 return
-            import hashlib
 
             actual_fp = hashlib.sha256(cert_der).hexdigest().upper()
             it = iter(actual_fp)
@@ -341,8 +341,7 @@ def start_client(
             target=client_handle_connection,
             args=(
                 newsocket,
-                remote_host,
-                remote_port,
+                (remote_host, remote_port),
                 password,
                 context,
                 fingerprint,

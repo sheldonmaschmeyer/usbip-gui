@@ -1,0 +1,40 @@
+name: Lint
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Pixi
+        uses: prefix-dev/setup-pixi@v0.8.1
+        with:
+          pixi-version: latest
+          cache: true
+          locked: false
+          manifest-path: pixi.toml
+
+      - name: Run Black Formatting Check
+        run: pixi run black --check .
+
+      - name: Run Flake8
+        run: pixi run flake8 .
+
+      - name: Run Pylint
+        run: pixi run pylint usbip_gui
+
+      - name: Run Pyright
+        run: pixi run pyright .

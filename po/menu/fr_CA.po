@@ -1,0 +1,37 @@
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: usbip-gui\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2024-12-06 14:18+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: French (Canada)\n"
+"Language: fr_CA\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "lang_toggle_tooltip"
+msgstr "Basculer la langue de l'interface entre l'anglais et le français"
+
+msgid "About"
+msgstr "À propos"
+
+msgid "File"
+msgstr "Fichier"
+
+msgid "Close"
+msgstr "Fermer"
+
+msgid "Version"
+msgstr "Version"
+
+msgid "Original Author"
+msgstr "Auteur original"
+
+msgid "Fork Maintainer"
+msgstr "Mainteneur du fork"
+
+msgid "USB/IP Manager"
+msgstr "Gestionnaire USB/IP"

@@ -1,0 +1,81 @@
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: usbip-gui\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2024-12-06 14:18+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: French (Canada)\n"
+"Language: fr_CA\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: usbip-gui/gui.py:17 usbip-gui/gui.py:22
+msgid "Bus ID"
+msgstr "ID du bus"
+
+#: usbip-gui/gui.py:17 usbip-gui/gui.py:23
+msgid "Manufacturer"
+msgstr "Fabricant"
+
+#: usbip-gui/gui.py:17 usbip-gui/gui.py:24
+msgid "Description"
+msgstr "Description"
+
+#: usbip-gui/gui.py:20
+msgid "Host"
+msgstr "Hôte"
+
+#: usbip-gui/gui.py:21
+msgid "Port"
+msgstr "Port"
+
+#: usbip-gui/gui.py:80 usbip-gui/gui.py:94 usbip-gui/gui.py:109
+#: usbip-gui/gui.py:141
+msgid "Error"
+msgstr "Erreur"
+
+#: usbip-gui/gui.py:344 usbip-gui/gui.py:373 usbip-gui/gui.py:405
+msgid "Refresh"
+msgstr "Actualiser"
+
+msgid "State"
+msgstr "État"
+
+msgid "Bound"
+msgstr "Associé"
+
+msgid "Unbound"
+msgstr "Non associé"
+
+msgid "Port "
+msgstr "Port "
+
+msgid "Secure"
+msgstr "Sécurisé"
+
+msgid "Apply Port & Restart"
+msgstr "Appliquer le port et redémarrer"
+
+msgid "Show Fingerprint"
+msgstr "Afficher l'empreinte"
+
+msgid "Regen Cert"
+msgstr "Régénérer le cert."
+
+msgid "Password required for secure connection"
+msgstr "Mot de passe requis pour une connexion sécurisée"
+
+msgid "Certificate Fingerprint"
+msgstr "Empreinte du certificat"
+
+msgid "Success"
+msgstr "Succès"
+
+msgid "Certificate Check"
+msgstr "Vérification du certificat"
+
+msgid "Warning"
+msgstr "Avertissement"
