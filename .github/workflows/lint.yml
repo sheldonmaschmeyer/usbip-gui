@@ -1,4 +1,4 @@
-name: Lint
+name: Test and Lint Checks
 
 on:
   workflow_dispatch:
@@ -11,8 +11,8 @@ permissions:
   contents: read
 
 jobs:
-  lint:
-    name: Lint Checks
+  test-and-lint:
+    name: Test and Lint Checks
     runs-on: ubuntu-latest
 
     steps:
@@ -38,3 +38,9 @@ jobs:
 
       - name: Run Pyright
         run: pixi run pyright .
+
+      - name: Run Mypy
+        run: pixi run mypy .
+
+      - name: Run Pytest
+        run: pixi run test
