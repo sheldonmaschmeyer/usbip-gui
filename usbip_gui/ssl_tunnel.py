@@ -1,4 +1,4 @@
-"""Module for SSL tunneling."""
+"""SSL/TLS tunnel implementation for secure USB/IP connections."""
 
 import ssl
 import socket

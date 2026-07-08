@@ -1,4 +1,4 @@
-"""Module for __init__.py."""
+"""Menu package initialization."""
 
 from .menu import create_main_menu
 

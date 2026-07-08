@@ -1,4 +1,4 @@
-"""Module for client.py."""
+"""Client tab implementation for managing remote USB device connections."""
 
 from tkinter import BooleanVar, Widget
 from tkinter.ttk import (
@@ -40,7 +40,7 @@ ATTACHED_COLUMNS = [
 
 
 def parse_remote_list(text: str) -> List[Tuple[str, str, str]]:
-    """Docstring for parse_remote_list."""
+    """Parse remote list."""
     if "no exportable devices found on" in text:
         return []
 
@@ -64,7 +64,7 @@ def parse_remote_list(text: str) -> List[Tuple[str, str, str]]:
 
 
 def parse_attached_list(text: str) -> List[Tuple[str, int, str, str, str]]:
-    """Docstring for parse_attached_list."""
+    """Parse attached list."""
     rows: List[Tuple[str, int, str, str, str]] = []
     lines = text.strip().split("\n")
     for i, line in enumerate(lines):
@@ -88,7 +88,7 @@ def parse_attached_list(text: str) -> List[Tuple[str, int, str, str, str]]:
 def get_or_create_client_tunnel(
     host: str, port: int, secure: bool, password: str
 ) -> Tuple[str, int]:
-    """Docstring for get_or_create_client_tunnel."""
+    """Get or create client tunnel."""
     if not secure:
         return host, port
 
@@ -204,7 +204,7 @@ def get_or_create_client_tunnel(
 def list_remote_usb(
     server_ip: str, port: int = 3240, secure: bool = False, password: str = ""
 ) -> List[Tuple[str, str, str]]:
-    """Docstring for list_remote_usb."""
+    """List remote usb."""
     target_ip, target_port = get_or_create_client_tunnel(
         server_ip, port, secure, password
     )
@@ -227,7 +227,7 @@ def list_remote_usb(
 
 
 def list_attached_usb() -> List[Tuple[str, int, str, str, str]]:
-    """Docstring for list_attached_usb."""
+    """List attached usb."""
     result = subprocess.run(
         ["sudo", "usbip", "port"], capture_output=True, text=True, check=False
     )
@@ -241,7 +241,7 @@ def attach_remote_usb(
     secure: bool = False,
     password: str = "",
 ):
-    """Docstring for attach_remote_usb."""
+    """Attach remote usb."""
     target_ip, target_port = get_or_create_client_tunnel(
         server_ip, port, secure, password
     )
@@ -267,7 +267,7 @@ def attach_remote_usb(
 
 
 def detach_remote_usb(port: int):
-    """Docstring for detach_remote_usb."""
+    """Detach remote usb."""
     subprocess.run(
         ["sudo", "usbip", "detach", "--port=" + str(port)],
         capture_output=True,
@@ -277,10 +277,10 @@ def detach_remote_usb(port: int):
 
 
 class ClientTab:
-    """Docstring for ClientTab."""
+    """Clienttab."""
 
     def __init__(self, parent: Widget):
-        """Docstring for __init__."""
+        """Initialize the class instance."""
         self.frame = Frame(parent)
 
         self.frame.columnconfigure(0, weight=1)
@@ -412,12 +412,12 @@ class ClientTab:
         )
 
     def check_secure_warning(self, var: BooleanVar):
-        """Docstring for check_secure_warning."""
+        """Check secure warning."""
         if not var.get():
             messagebox.showwarning(_("Warning"), _("insecure_warning_msg"))
 
     def refresh_remote(self):
-        """Docstring for refresh_remote."""
+        """Refresh remote."""
         server_ip = self.remote_ip_input.get()
         try:
             port = int(self.remote_port_input.get())
@@ -433,14 +433,14 @@ class ClientTab:
             self.remote_listbox.insert("", "end", values=device)
 
     def refresh_attached(self):
-        """Docstring for refresh_attached."""
+        """Refresh attached."""
         attached_devices = list_attached_usb()
         self.attached_listbox.delete(*self.attached_listbox.get_children())
         for attached_device in attached_devices:
             self.attached_listbox.insert("", "end", values=attached_device)
 
     def attach_remote(self):
-        """Docstring for attach_remote."""
+        """Attach remote."""
         server_ip = self.remote_ip_input.get()
         try:
             port = int(self.remote_port_input.get())
@@ -462,7 +462,7 @@ class ClientTab:
         self.refresh_attached()
 
     def detach_remote(self):
-        """Docstring for detach_remote."""
+        """Detach remote."""
         selection = self.attached_listbox.selection()
         if not selection:
             messagebox.showerror(_("Error"), _("no selection to detach"))

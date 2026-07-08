@@ -1,4 +1,4 @@
-"""Module for about.py."""
+"""About dialog and application information."""
 
 import tkinter as tk
 from tkinter.ttk import Button
@@ -8,7 +8,7 @@ _ = get_translator("menu")
 
 
 def show_about_dialog(parent: tk.Tk | tk.Toplevel | None = None):
-    """Docstring for show_about_dialog."""
+    """Show about dialog."""
     dialog = tk.Toplevel(parent)
     dialog.title(_("About"))
     dialog.geometry("500x250")

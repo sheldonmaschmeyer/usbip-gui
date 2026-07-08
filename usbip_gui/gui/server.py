@@ -1,4 +1,4 @@
-"""Module for server.py."""
+"""Server tab implementation for exposing local USB devices."""
 
 from tkinter import BooleanVar, Widget
 from tkinter.ttk import (
@@ -37,7 +37,7 @@ def init_usbip_server(
     password: str = "",
     bind_host: str = "127.0.0.1",
 ):
-    """Docstring for init_usbip_server."""
+    """Init usbip server."""
     subprocess.run(["sudo", "pkill", "usbipd"], check=False)
     if tunnel_state.server_process:
         try:
@@ -84,7 +84,7 @@ def init_usbip_server(
 
 
 def parse_local_list(text: str) -> List[Tuple[str, str, str, str]]:
-    """Docstring for parse_local_list."""
+    """Parse local list."""
     if not text or not text.strip():
         return []
 
@@ -114,7 +114,7 @@ def parse_local_list(text: str) -> List[Tuple[str, str, str, str]]:
 
 
 def list_local_usb() -> List[Tuple[str, str, str, str]]:
-    """Docstring for list_local_usb."""
+    """List local usb."""
     result = subprocess.run(
         ["sudo", "usbip", "list", "--local"],
         capture_output=True,
@@ -125,7 +125,7 @@ def list_local_usb() -> List[Tuple[str, str, str, str]]:
 
 
 def bind_local_usb(bus_id: str):
-    """Docstring for bind_local_usb."""
+    """Bind local usb."""
     result = subprocess.run(
         ["sudo", "usbip", "bind", "--busid=" + bus_id],
         capture_output=True,
@@ -138,7 +138,7 @@ def bind_local_usb(bus_id: str):
 
 
 def unbind_local_usb(bus_id: str):
-    """Docstring for unbind_local_usb."""
+    """Unbind local usb."""
     result = subprocess.run(
         ["sudo", "usbip", "unbind", "--busid=" + bus_id],
         capture_output=True,
@@ -151,10 +151,10 @@ def unbind_local_usb(bus_id: str):
 
 
 class ServerTab:
-    """Docstring for ServerTab."""
+    """Servertab."""
 
     def __init__(self, parent: Widget):
-        """Docstring for __init__."""
+        """Initialize the class instance."""
         self.frame = Frame(parent)
 
         self.frame.columnconfigure(0, weight=1)
@@ -275,12 +275,12 @@ class ServerTab:
         )
 
     def check_secure_warning(self, var: BooleanVar):
-        """Docstring for check_secure_warning."""
+        """Check secure warning."""
         if not var.get():
             messagebox.showwarning(_("Warning"), _("insecure_warning_msg"))
 
     def show_fingerprint(self):
-        """Docstring for show_fingerprint."""
+        """Show fingerprint."""
         try:
             cert_path, _key_path = ssl_tunnel.get_cert_paths()
             fp = ssl_tunnel.get_cert_fingerprint(cert_path)
@@ -289,7 +289,7 @@ class ServerTab:
             messagebox.showerror(_("Error"), str(e))
 
     def regenerate_cert(self):
-        """Docstring for regenerate_cert."""
+        """Regenerate cert."""
         try:
             cert_path, key_path = ssl_tunnel.get_cert_paths()
             if os.path.exists(cert_path):
@@ -302,14 +302,14 @@ class ServerTab:
             messagebox.showerror(_("Error"), str(e))
 
     def refresh_local(self):
-        """Docstring for refresh_local."""
+        """Refresh local."""
         local_devices = list_local_usb()
         self.local_listbox.delete(*self.local_listbox.get_children())
         for device in local_devices:
             self.local_listbox.insert("", "end", values=device)
 
     def restart_server(self):
-        """Docstring for restart_server."""
+        """Restart server."""
         try:
             port = int(self.local_port_input.get())
         except ValueError:
@@ -326,7 +326,7 @@ class ServerTab:
         init_usbip_server(port, secure, password, bind_host)
 
     def bind_local(self):
-        """Docstring for bind_local."""
+        """Bind local."""
         selection = self.local_listbox.selection()
         if not selection:
             messagebox.showerror(_("Error"), _("no selection to bind"))
@@ -337,7 +337,7 @@ class ServerTab:
         self.refresh_local()
 
     def unbind_local(self):
-        """Docstring for unbind_local."""
+        """Unbind local."""
         selection = self.local_listbox.selection()
         if not selection:
             messagebox.showerror(_("Error"), _("no selection to unbind"))

@@ -1,4 +1,4 @@
-"""Module for gui.py."""
+"""Main graphical user interface implementation and window management."""
 
 from tkinter import Tk
 from tkinter.ttk import Notebook, Label, Style
@@ -16,10 +16,17 @@ _ = get_translator("gui")
 
 
 class UsbIpGui:
-    """Docstring for UsbIpGui."""
+    """
+    Main application class for the USB/IP GUI manager.
+
+    This class encapsulates the main Tkinter window (root), style
+    configurations, and notebook tabs (Server and Client). It replaces the
+    previous architecture that relied on global variables, providing a clean,
+    object-oriented state management system for the UI components.
+    """
 
     def __init__(self, root: Tk):
-        """Docstring for __init__."""
+        """Initialize the class instance."""
         self.root = root
         self.root.wm_title(_("USB/IP Manager"))
         self.root.geometry(DEFAULT_GEOMETRY)
@@ -44,7 +51,7 @@ class UsbIpGui:
 
 
 def start_app():
-    """Docstring for start_app."""
+    """Start app."""
     root = Tk()
     root.wm_title(_("USB/IP Manager"))
     root.geometry(DEFAULT_GEOMETRY)
