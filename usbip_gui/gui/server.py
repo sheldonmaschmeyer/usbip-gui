@@ -1,6 +1,6 @@
 """Server tab implementation for exposing local USB devices."""
 
-from tkinter import BooleanVar, Widget
+from tkinter import BooleanVar, Widget, Event
 from tkinter.ttk import (
     Frame,
     Label,
@@ -235,6 +235,8 @@ class ServerTab:
         for col in LOCAL_DEVICE_COLUMNS:
             self.local_listbox.heading(col, text=col)
 
+        self.local_listbox.bind("<Double-1>", self.on_double_click)
+
         local_devices = list_local_usb()
         for device in local_devices:
             self.local_listbox.insert("", "end", values=device)
@@ -346,3 +348,14 @@ class ServerTab:
         unbind_local_usb(str(bus_id))
         time.sleep(0.5)
         self.refresh_local()
+
+    def on_double_click(self, _event: Event) -> None:
+        """Toggle bind/unbind on double click."""
+        selection = self.local_listbox.selection()
+        if not selection:
+            return
+        state = self.local_listbox.item(selection[0])["values"][1]
+        if state == t("Bound"):
+            self.unbind_local()
+        else:
+            self.bind_local()
