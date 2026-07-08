@@ -29,14 +29,14 @@ def get_translator(domain: str):
     if domain == "common":
         return common_t.gettext
 
-    t = gettext.translation(
+    translator = gettext.translation(
         f"usbip-gui-{domain}", localedir=localedir, fallback=True
     )
-    t.add_fallback(common_t)
-    return t.gettext
+    translator.add_fallback(common_t)
+    return translator.gettext
 
 
-_ = get_translator("common")
+t = get_translator("common")
 
 
 class TunnelState:

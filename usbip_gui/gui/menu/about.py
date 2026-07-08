@@ -4,13 +4,13 @@ import tkinter as tk
 from tkinter.ttk import Button
 from ..common import VERSION, get_translator
 
-_ = get_translator("menu")
+t = get_translator("menu")
 
 
 def show_about_dialog(parent: tk.Tk | tk.Toplevel | None = None):
     """Show about dialog."""
     dialog = tk.Toplevel(parent)
-    dialog.title(_("About"))
+    dialog.title(t("About"))
     dialog.geometry("500x250")
     dialog.configure(bg="#1e1e2e")
     dialog.resizable(False, False)
@@ -20,10 +20,10 @@ def show_about_dialog(parent: tk.Tk | tk.Toplevel | None = None):
         dialog.grab_set()
 
     about_text = (
-        f"{_('USB/IP Manager')}\n"
-        f"{_('Version')} {VERSION}\n\n"
-        f"{_('Original Author')}: K-Francis-H\n"
-        f"{_('Fork Maintainer')}: Sheldon Maschmeyer\n\n"
+        f"{t('USB/IP Manager')}\n"
+        f"{t('Version')} {VERSION}\n\n"
+        f"{t('Original Author')}: K-Francis-H\n"
+        f"{t('Fork Maintainer')}: Sheldon Maschmeyer\n\n"
         f"GitHub: https://github.com/sheldonmaschmeyer/usbip-gui"
     )
 

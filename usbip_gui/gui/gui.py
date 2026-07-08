@@ -12,7 +12,7 @@ from .server import ServerTab
 from .client import ClientTab
 from .menu import create_main_menu
 
-_ = get_translator("gui")
+t = get_translator("gui")
 
 
 class UsbIpGui:
@@ -28,7 +28,7 @@ class UsbIpGui:
     def __init__(self, root: Tk):
         """Initialize the class instance."""
         self.root = root
-        self.root.wm_title(_("USB/IP Manager"))
+        self.root.wm_title(t("USB/IP Manager"))
         self.root.geometry(DEFAULT_GEOMETRY)
 
         create_main_menu(self.root)
@@ -43,17 +43,17 @@ class UsbIpGui:
         self.client_tab = ClientTab(self.notebook)
 
         self.notebook.add(
-            self.server_tab.frame, text=_("Server (Local USB Devices)")
+            self.server_tab.frame, text=t("Server (Local USB Devices)")
         )
         self.notebook.add(
-            self.client_tab.frame, text=_("Client (Remote USB Devices)")
+            self.client_tab.frame, text=t("Client (Remote USB Devices)")
         )
 
 
 def start_app():
     """Start app."""
     root = Tk()
-    root.wm_title(_("USB/IP Manager"))
+    root.wm_title(t("USB/IP Manager"))
     root.geometry(DEFAULT_GEOMETRY)
 
     style = Style(root)

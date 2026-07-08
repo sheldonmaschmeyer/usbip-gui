@@ -4,7 +4,7 @@ import os
 import sys
 from ..common import get_translator
 
-_ = get_translator("menu")
+t = get_translator("menu")
 
 
 def toggle_language():
