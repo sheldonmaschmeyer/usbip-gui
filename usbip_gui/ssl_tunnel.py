@@ -7,6 +7,7 @@ import argparse
 import os
 import subprocess
 import hashlib
+import errno
 
 
 def get_cert_paths() -> tuple[str, str]:
@@ -129,7 +130,8 @@ def server_handle_connection(
 
         forward(client_socket, target_socket)
     except OSError as e:
-        print(f"Server connection error: {e}")
+        if e.errno not in (errno.EPIPE, errno.ECONNRESET):
+            print(f"Server connection error: {e}")
     finally:
         try:
             client_socket.close()
@@ -202,7 +204,8 @@ def client_handle_connection(
 
         forward(local_socket, ssl_remote_socket)
     except OSError as e:
-        print(f"Client connection error: {e}")
+        if e.errno not in (errno.EPIPE, errno.ECONNRESET):
+            print(f"Client connection error: {e}")
     finally:
         try:
             local_socket.close()
@@ -244,8 +247,14 @@ def forward(sock1: socket.socket, sock2: socket.socket) -> None:
     t2.start()
     t1.join()
     t2.join()
-    sock1.close()
-    sock2.close()
+    try:
+        sock1.close()
+    except OSError:
+        pass
+    try:
+        sock2.close()
+    except OSError:
+        pass
 
 
 def start_server(
