@@ -1,4 +1,4 @@
-"""Module for __init__.py."""
+"""GUI package initialization."""
 
 from .gui import start_app
 

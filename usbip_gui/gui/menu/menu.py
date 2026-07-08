@@ -1,4 +1,4 @@
-"""Module for menu.py."""
+"""Main application menu bar implementation."""
 
 import tkinter as tk
 from tkinter import Menu
@@ -10,7 +10,7 @@ _ = get_translator("menu")
 
 
 def create_main_menu(root: tk.Tk | tk.Toplevel):
-    """Docstring for create_main_menu."""
+    """Create main menu."""
     bg = "#1e1e2e"
     fg = "#cdd6f4"
     abg = "#45475a"

@@ -1,4 +1,4 @@
-"""Module for common.py."""
+"""Common utilities, state management, and shared components for the GUI."""
 
 import subprocess
 import atexit
@@ -14,7 +14,7 @@ DEFAULT_GEOMETRY = "1400x842"
 
 
 def get_translator(domain: str):
-    """Docstring for get_translator."""
+    """Get translator."""
     _local_localedir = Path(__file__).parent.parent.parent / "share" / "locale"
     localedir = (
         str(_local_localedir)
@@ -40,10 +40,10 @@ _ = get_translator("common")
 
 
 class TunnelState:
-    """Docstring for TunnelState."""
+    """Tunnelstate."""
 
     def __init__(self):
-        """Docstring for __init__."""
+        """Initialize the class instance."""
         self.server_process: Optional[subprocess.Popen[bytes]] = None
         self.client_processes: Dict[
             Tuple[str, int], Tuple[int, subprocess.Popen[bytes], str]
@@ -54,7 +54,7 @@ tunnel_state = TunnelState()
 
 
 def cleanup_tunnels():
-    """Docstring for cleanup_tunnels."""
+    """Cleanup tunnels."""
     if tunnel_state.server_process:
         try:
             tunnel_state.server_process.terminate()
@@ -71,10 +71,10 @@ atexit.register(cleanup_tunnels)
 
 
 class ToolTip:
-    """Docstring for ToolTip."""
+    """Tooltip."""
 
     def __init__(self, widget: tk.Widget, text: str):
-        """Docstring for __init__."""
+        """Initialize the class instance."""
         self.widget = widget
         self.text = text
         self.tooltip_window: Optional[tk.Toplevel] = None
@@ -82,7 +82,7 @@ class ToolTip:
         self.widget.bind("<Leave>", self.hide_tooltip)
 
     def show_tooltip(self, _event: Optional[tk.Event] = None):
-        """Docstring for show_tooltip."""
+        """Show tooltip."""
         if self.tooltip_window or not self.text:
             return
         x = self.widget.winfo_rootx() + 25
@@ -104,7 +104,7 @@ class ToolTip:
         label.pack(ipadx=5, ipady=3)
 
     def hide_tooltip(self, _event: Optional[tk.Event] = None):
-        """Docstring for hide_tooltip."""
+        """Hide tooltip."""
         if self.tooltip_window:
             self.tooltip_window.destroy()
             self.tooltip_window = None
