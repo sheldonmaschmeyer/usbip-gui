@@ -358,7 +358,8 @@ def start_client(
         ).start()
 
 
-if __name__ == "__main__":
+def main() -> None:
+    """Parse arguments and start the appropriate mode."""
     parser = argparse.ArgumentParser()
     parser.add_argument("mode", choices=["server", "client"])
     parser.add_argument("--listen-port", type=int, required=True)
@@ -393,3 +394,7 @@ if __name__ == "__main__":
             args.password,
             args.fingerprint,
         )
+
+
+if __name__ == "__main__":
+    main()

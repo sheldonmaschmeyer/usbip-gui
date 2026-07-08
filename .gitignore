@@ -2,3 +2,5 @@ __pycache__/
 build/
 .build/
 .zsh_history
+.coverage
+htmlcov/

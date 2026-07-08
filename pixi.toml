@@ -12,12 +12,14 @@ flake8 = "*"
 black = "*"
 pylint = "*"
 pytest = "*"
+pytest-cov = "*"
 pyright = ">=1.1.411,<2"
+mypy = "*"
 
 [environments]
 default = ["dev"]
 [tasks]
 usbip = "python3 -m usbip_gui.main"
-lint = "flake8 . && pylint . && pyright ."
-format = "black ."
-test = "pytest"
+lint = "python3 -m flake8 . && python3 -m pylint . && python3 -m pyright . && python3 -m mypy ."
+format = "python3 -m black ."
+test = "PYTHONPATH=. python3 -m pytest tests/ -v --cov=usbip_gui --cov-report=html --cov-report=term"
