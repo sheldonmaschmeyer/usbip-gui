@@ -1,4 +1,18 @@
-# usbip-gui
+# USB/IP Manager
+
+- [USB/IP Manager](#usbip-manager)
+  - [Docker](#docker)
+  - [Translations](#translations)
+  - [Secure Connection (SSL Tunneling)](#secure-connection-ssl-tunneling)
+    - [How it works](#how-it-works)
+    - [Connecting over the Internet](#connecting-over-the-internet)
+  - [Host System Requirements](#host-system-requirements)
+  - [Local Installation (Without Docker)](#local-installation-without-docker)
+  - [Development Commands](#development-commands)
+  - [Tasks](#tasks)
+  - [Screenshots](#screenshots)
+  - [References](#references)
+  - [License](#license)
 
 This is a fork of K-Francis-H's `usbip-gui`, created to integrate SSL/SSH
 encryption directly into the graphical interface. While `usbip` can currently be
@@ -87,9 +101,46 @@ To securely share a USB device across the internet:
 3. **Connect the Client:** In the GUI's "Client" tab, enter the Server's public
    IP address or hostname in the **Host** field. Leave the **Port** as `3240`.
 4. Check the **Secure** box and enter the exact same password you set on the
-   server.
+    server.
 5. Click **Refresh Remote** or **Attach** to seamlessly connect over the
    encrypted tunnel!
+
+## Host System Requirements
+
+While Docker provides a consistent environment, `usbip` fundamentally relies on
+Linux kernel modules to function. Therefore, the **host machine must be running
+Linux** and have the following kernel modules available: `usbip_core`,
+`usbip_host`, and `vhci_hcd`.
+
+On Ubuntu-based systems, you can usually ensure these are present by installing
+the `linux-tools-generic` package. The Docker container operates with
+`privileged: true` to access and load these modules from the host kernel.
+
+## Local Installation (Without Docker)
+
+If you prefer to run the application directly on your host system without
+Docker:
+
+1. Ensure you have the system dependencies installed: `python3-tk`,
+   `linux-tools-generic`, and `hwdata`.
+2. Ensure you have [pixi](https://pixi.sh/) installed.
+3. Start the application by running:
+   ```zsh
+   pixi run usbip
+   ```
+*Note: The application automatically executes `setup_usbip.sh` on startup if the
+required kernel modules aren't loaded. This script uses `sudo` to run `modprobe`
+and start the `usbipd` daemon, so you may be prompted for your password.*
+
+## Development Commands
+
+This project uses `pixi` for environment and task management. If you are
+developing or contributing, the following commands are available:
+
+* `pixi run format`: Formats the code using `black`.
+* `pixi run lint`: Runs `flake8`, `pylint`, `pyright`, and `mypy` to check code
+  quality.
+* `pixi run test`: Runs the test suite via `pytest` with coverage reporting.
 
 ## Tasks
 
@@ -98,18 +149,40 @@ To securely share a USB device across the internet:
   new features.
 - [x] reducing/eliminating global variable usage
 - [x] Add SSL/SSH encryption feature.
-- [ ] Move code into modules, i.e. compartmentalize sections of the gui.py.
+- [x] Move code into modules, i.e. compartmentalize sections of the gui.py.
+- [ ] Optional: Windows compatibility; pixi without docker.
+- [ ] Optional: Windows installer version, fully packaged.
 - [ ] Cross-architecture (ARM and x86) production testing.
-- [ ] Look at K-Francis-H's remaining TODOs.
+- [x] Look at K-Francis-H's remaining TODOs.
 
-## Screenshot
+## Screenshots
+![screenshot of usbip_manager_v1.1.0_en_server](screenshots/usbip_manager_v1.1.0_en_server.png)
 
-![screenshot of usbip gui_v1_en](screenshots/usbip_gui_v1_en.png)
-Figure 1: USBIP GUI v1 English screenshot
+Figure 1: English Server
 
-![screenshot of usbip gui_v1_fr](screenshots/usbip_gui_v1_fr.png)
-Figure 2: USBIP GUI v1 French screenshot
+![screenshot of usbip_manager_v1.1.0_en_client](screenshots/usbip_manager_v1.1.0_en_client.png)
+
+Figure 2: English Client
+
+![screenshot of usbip_manager_v1.1.0_en_about](screenshots/usbip_manager_v1.1.0_en_about.png)
+
+Figure 3: English About
+
+![screenshot of usbip_manager_v1.1.0_fr_server](screenshots/usbip_manager_v1.1.0_fr_server.png)
+
+Figure 4: French Server
+
+![screenshot of usbip_manager_v1.1.0_fr_client](screenshots/usbip_manager_v1.1.0_fr_client.png)
+
+Figure 5: French Client
+
+![screenshot of usbip_manager_v1.1.0_fr_about](screenshots/usbip_manager_v1.1.0_fr_about.png)
+
+Figure 6: French About
 
 ## References
 [Original K-Francis-H's README](https://github.com/K-Francis-H/usbip-gui/blob/main/README.md)
 
+## License
+This project is licensed under the GPL-3.0 License - see the [LICENSE](LICENSE)
+file for details.
