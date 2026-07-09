@@ -3,7 +3,7 @@
 import subprocess
 import atexit
 import tkinter as tk
-from typing import Optional, Dict, Tuple, Any, Callable
+from typing import Optional, Dict, Tuple, Callable, Union, List
 import gettext
 from pathlib import Path
 import json
@@ -14,6 +14,11 @@ VERSION = "1.2.0"
 
 USBIPD_PORT = 3240
 DEFAULT_GEOMETRY = "1400x842"
+
+JsonValue = Union[
+    str, int, float, bool, None, Dict[str, "JsonValue"], List["JsonValue"]
+]
+JsonDict = Dict[str, JsonValue]
 
 
 def get_config_dir() -> Path:
@@ -39,7 +44,7 @@ def get_config_path() -> Path:
     return get_config_dir() / "settings.json"
 
 
-def load_config() -> Dict[str, Any]:
+def load_config() -> JsonDict:
     """Load configuration from file."""
     config_path = get_config_path()
     if config_path.exists():
@@ -51,7 +56,7 @@ def load_config() -> Dict[str, Any]:
     return {}
 
 
-def save_config(config: Dict[str, Any]) -> None:
+def save_config(config: JsonDict) -> None:
     """Save configuration to file."""
     config_path = get_config_path()
     try:
