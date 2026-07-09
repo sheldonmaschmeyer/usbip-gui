@@ -1,5 +1,6 @@
 """Tests for the common gui components."""
 
+from pathlib import Path
 from unittest.mock import patch, MagicMock
 from usbip_gui.gui.common import (
     TunnelState,
@@ -7,6 +8,7 @@ from usbip_gui.gui.common import (
     tunnel_state,
     get_translator,
     ToolTip,
+    get_config_dir,
 )
 
 
@@ -108,3 +110,40 @@ def test_tooltip(mock_label: MagicMock, mock_top: MagicMock):
 
     # hide when None
     tt.hide_tooltip()
+
+
+@patch("usbip_gui.gui.common.Path.mkdir")
+@patch("usbip_gui.gui.common.sys")
+@patch.dict("os.environ", {"APPDATA": "/mock/appdata"})
+def test_get_config_dir_windows(mock_sys: MagicMock, _mock_mkdir: MagicMock):
+    """Test get_config_dir on Windows with APPDATA env var."""
+    mock_sys.platform = "win32"
+
+    config_dir = get_config_dir()
+    assert config_dir == Path("/mock/appdata/usbip-gui")
+
+
+@patch("usbip_gui.gui.common.Path.mkdir")
+@patch("usbip_gui.gui.common.sys")
+@patch("usbip_gui.gui.common.Path.home")
+@patch.dict("os.environ", {}, clear=True)
+def test_get_config_dir_windows_no_appdata(
+    mock_home: MagicMock, mock_sys: MagicMock, _mock_mkdir: MagicMock
+):
+    """Test get_config_dir on Windows without APPDATA env var."""
+    mock_sys.platform = "win32"
+    mock_home.return_value = Path("/mock/home")
+
+    config_dir = get_config_dir()
+    assert config_dir == Path("/mock/home/AppData/Roaming/usbip-gui")
+
+
+@patch("usbip_gui.gui.common.Path.mkdir")
+@patch("usbip_gui.gui.common.sys")
+@patch.dict("os.environ", {"XDG_CONFIG_HOME": "/mock/xdg"})
+def test_get_config_dir_linux_xdg(mock_sys: MagicMock, _mock_mkdir: MagicMock):
+    """Test get_config_dir on Linux with XDG_CONFIG_HOME."""
+    mock_sys.platform = "linux"
+
+    config_dir = get_config_dir()
+    assert config_dir == Path("/mock/xdg/usbip-gui")

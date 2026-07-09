@@ -9,11 +9,11 @@ from usbip_gui.gui.menu.language_switcher import toggle_language
 @patch("usbip_gui.gui.menu.menu.Menu")
 def test_create_main_menu(mock_menu: MagicMock):
     """Test creation of the main application menu."""
-    mock_root = MagicMock()
-    create_main_menu(mock_root)
+    mock_app = MagicMock()
+    create_main_menu(mock_app)
 
     mock_menu.assert_called()
-    assert mock_root.config.called
+    assert mock_app.root.config.called
 
 
 @patch("usbip_gui.gui.menu.about.tk.Toplevel")

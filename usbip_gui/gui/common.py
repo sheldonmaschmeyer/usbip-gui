@@ -3,17 +3,65 @@
 import subprocess
 import atexit
 import tkinter as tk
-from typing import Optional, Dict, Tuple
+from typing import Optional, Dict, Tuple, Any, Callable
 import gettext
 from pathlib import Path
+import json
+import os
+import sys
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 
 USBIPD_PORT = 3240
 DEFAULT_GEOMETRY = "1400x842"
 
 
-def get_translator(domain: str):
+def get_config_dir() -> Path:
+    """Get the configuration directory."""
+    # While not ready for Windows today, this will assist with cross-platform
+    # compatibility in the future.
+    if sys.platform == "win32":
+        base_dir = os.environ.get("APPDATA") or (
+            Path.home() / "AppData" / "Roaming"
+        )
+    else:
+        base_dir = os.environ.get("XDG_CONFIG_HOME") or (
+            Path.home() / ".config"
+        )
+
+    config_dir = Path(base_dir) / "usbip-gui"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    return config_dir
+
+
+def get_config_path() -> Path:
+    """Get the configuration file path."""
+    return get_config_dir() / "settings.json"
+
+
+def load_config() -> Dict[str, Any]:
+    """Load configuration from file."""
+    config_path = get_config_path()
+    if config_path.exists():
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:  # pylint: disable=broad-exception-caught
+            pass
+    return {}
+
+
+def save_config(config: Dict[str, Any]) -> None:
+    """Save configuration to file."""
+    config_path = get_config_path()
+    try:
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump(config, f, indent=4)
+    except Exception:  # pylint: disable=broad-exception-caught
+        pass
+
+
+def get_translator(domain: str) -> Callable[[str], str]:
     """Get translator."""
     _local_localedir = Path(__file__).parent.parent.parent / "share" / "locale"
     localedir = (
@@ -42,7 +90,7 @@ t = get_translator("common")
 class TunnelState:
     """Tunnelstate."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the class instance."""
         self.server_process: Optional[subprocess.Popen[bytes]] = None
         self.client_processes: Dict[
@@ -53,7 +101,7 @@ class TunnelState:
 tunnel_state = TunnelState()
 
 
-def cleanup_tunnels():
+def cleanup_tunnels() -> None:
     """Cleanup tunnels."""
     if tunnel_state.server_process:
         try:
@@ -73,7 +121,7 @@ atexit.register(cleanup_tunnels)
 class ToolTip:
     """Tooltip."""
 
-    def __init__(self, widget: tk.Widget, text: str):
+    def __init__(self, widget: tk.Widget, text: str) -> None:
         """Initialize the class instance."""
         self.widget = widget
         self.text = text
@@ -81,7 +129,7 @@ class ToolTip:
         self.widget.bind("<Enter>", self.show_tooltip)
         self.widget.bind("<Leave>", self.hide_tooltip)
 
-    def show_tooltip(self, _event: Optional[tk.Event] = None):
+    def show_tooltip(self, _event: Optional[tk.Event] = None) -> None:
         """Show tooltip."""
         if self.tooltip_window or not self.text:
             return
@@ -103,7 +151,7 @@ class ToolTip:
         )
         label.pack(ipadx=5, ipady=3)
 
-    def hide_tooltip(self, _event: Optional[tk.Event] = None):
+    def hide_tooltip(self, _event: Optional[tk.Event] = None) -> None:
         """Hide tooltip."""
         if self.tooltip_window:
             self.tooltip_window.destroy()

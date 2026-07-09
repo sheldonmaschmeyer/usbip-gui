@@ -2,6 +2,7 @@
 
 import runpy
 import sys
+import os
 from unittest.mock import patch, MagicMock
 from usbip_gui.ssl_tunnel import (
     get_cert_fingerprint,
@@ -58,15 +59,16 @@ def test_recv_exact():
     assert data == b"hello"
 
 
+@patch.dict("os.environ", {}, clear=True)
 @patch("usbip_gui.ssl_tunnel.os.path.expanduser")
 @patch("usbip_gui.ssl_tunnel.os.makedirs")
 def test_get_cert_paths(mock_makedirs: MagicMock, mock_expanduser: MagicMock):
     """Test getting config paths."""
     mock_expanduser.return_value = "/mock/dir"
     cert, key = get_cert_paths()
-    mock_makedirs.assert_called_once_with("/mock/dir", exist_ok=True)
-    assert cert == "/mock/dir/server.crt"
-    assert key == "/mock/dir/server.key"
+    mock_makedirs.assert_called_once_with("/mock/dir/usbip-gui", exist_ok=True)
+    assert cert == "/mock/dir/usbip-gui/server.crt"
+    assert key == "/mock/dir/usbip-gui/server.key"
 
 
 @patch("usbip_gui.ssl_tunnel.socket.socket")
@@ -430,3 +432,35 @@ def test_main_name():
             runpy.run_path("usbip_gui/ssl_tunnel.py", run_name="__main__")
         except SystemExit:
             pass
+
+
+@patch("usbip_gui.ssl_tunnel.sys")
+@patch.dict("os.environ", {"APPDATA": "/mock/appdata"})
+@patch("usbip_gui.ssl_tunnel.os.makedirs")
+def test_get_cert_paths_windows(
+    _mock_makedirs: MagicMock, mock_sys: MagicMock
+):
+    """Test get_cert_paths on Windows with APPDATA env var."""
+    mock_sys.platform = "win32"
+    cert, key = get_cert_paths()
+    assert cert == os.path.join("/mock/appdata/usbip-gui", "server.crt")
+    assert key == os.path.join("/mock/appdata/usbip-gui", "server.key")
+
+
+@patch("usbip_gui.ssl_tunnel.sys")
+@patch("usbip_gui.ssl_tunnel.os.path.expanduser")
+@patch.dict("os.environ", {}, clear=True)
+@patch("usbip_gui.ssl_tunnel.os.makedirs")
+def test_get_cert_paths_windows_no_appdata(
+    _mock_makedirs: MagicMock, mock_expanduser: MagicMock, mock_sys: MagicMock
+):
+    """Test get_cert_paths on Windows without APPDATA env var."""
+    mock_sys.platform = "win32"
+    mock_expanduser.return_value = "/mock/home"
+    cert, key = get_cert_paths()
+    assert cert == os.path.join(
+        "/mock/home", "AppData", "Roaming", "usbip-gui", "server.crt"
+    )
+    assert key == os.path.join(
+        "/mock/home", "AppData", "Roaming", "usbip-gui", "server.key"
+    )
