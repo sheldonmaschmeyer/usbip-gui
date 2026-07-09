@@ -32,9 +32,12 @@ ENV LANG=en_US.UTF-8
 ENV LANGUAGE=en_US:en
 ENV LC_ALL=en_US.UTF-8
 
-# The Ubuntu linux-tools wrapper at /usr/sbin/usbip expects the exact host kernel version.
-# We bypass it by symlinking the actual installed binary directly to /usr/local/bin/usbip
-RUN ln -sf $(ls -1 /usr/lib/linux-tools/*/usbip | head -n 1) /usr/local/bin/usbip
+# The Ubuntu linux-tools wrapper at /usr/sbin/usbip and /usr/sbin/usbipd expects
+# the exact host kernel version. We bypass them by symlinking the actual
+# installed binaries directly to /usr/local/bin/. This allows usbip-gui to work
+# regardless of the host kernel version, including on a Jetson Xavier.
+RUN ln -sf $(ls -1 /usr/lib/linux-tools/*/usbip | head -n 1) /usr/local/bin/usbip && \
+    ln -sf $(ls -1 /usr/lib/linux-tools/*/usbipd | head -n 1) /usr/local/bin/usbipd
 
 # We allow non-root user to run sudo commands without a password prompt for
 # convenience in the container. TODO: Consider removing this if possible.
