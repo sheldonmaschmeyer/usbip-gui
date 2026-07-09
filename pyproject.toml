@@ -14,3 +14,4 @@ min-public-methods = 0
 
 [tool.mypy]
 check_untyped_defs = true
+disallow_any_explicit = true

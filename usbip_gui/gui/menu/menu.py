@@ -1,15 +1,18 @@
 """Main application menu bar implementation."""
 
 from tkinter import Menu
-from typing import Any
+from typing import TYPE_CHECKING
 from ..common import get_translator
 from .about import show_about_dialog
 from .language_switcher import toggle_language
 
 t = get_translator("menu")
 
+if TYPE_CHECKING:
+    from usbip_gui.gui.gui import UsbIpGui
 
-def create_main_menu(app: Any):
+
+def create_main_menu(app: "UsbIpGui"):
     """Create main menu."""
     root = app.root
     bg = "#1e1e2e"

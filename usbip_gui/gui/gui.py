@@ -42,13 +42,13 @@ class UsbIpGui:
 
         config = load_config()
         self.show_server_var = BooleanVar(
-            value=config.get("show_server", True)
+            value=bool(config.get("show_server", True))
         )
         self.show_client_var = BooleanVar(
-            value=config.get("show_client", True)
+            value=bool(config.get("show_client", True))
         )
         self.default_tab_var = StringVar(
-            value=config.get("default_tab", "server")
+            value=str(config.get("default_tab", "server"))
         )
 
         self.update_tabs()

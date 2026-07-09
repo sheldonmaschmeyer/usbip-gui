@@ -1,6 +1,5 @@
 """Tests for gui components."""
 
-from typing import Any
 from unittest.mock import patch, MagicMock
 from usbip_gui.gui.gui import UsbIpGui, start_app
 
@@ -124,7 +123,7 @@ def test_gui_update_tabs_and_defaults(
     # 1. Test update_tabs with TclErrors and broad exception
     mock_notebook.forget.side_effect = TclError("forget error")
 
-    def mock_select_side_effect(*args: Any, **kwargs: Any):
+    def mock_select_side_effect(*args: object, **kwargs: object):
         if not args and not kwargs:
             raise TclError("select error")
 
