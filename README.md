@@ -186,8 +186,7 @@ Figure 6: French About
 
 ## Donations
 
-[![Donate with PayPal](https://img.shields.io/badge/Donate-PayPal-blue.svg?logo=paypal&style=flat-
-  square)](https://paypal.me/sheldonmaschmeyer)
+[![Donate with PayPal](https://shields.io/badge/paypal-donate-ff5f5f?logo=paypal&color=blue)](https://paypal.me/sheldonmaschmeyer)
 
 Thank you 😀
 
