@@ -25,7 +25,13 @@ import time
 from typing import List, Tuple
 from urllib.parse import urlparse
 
-from .common import get_translator, USBIPD_PORT, tunnel_state, ToolTip
+from .common import (
+    get_translator,
+    USBIPD_PORT,
+    tunnel_state,
+    ToolTip,
+    get_config_dir,
+)
 
 t = get_translator("client")
 
@@ -109,9 +115,7 @@ def get_or_create_client_tunnel(
         it = iter(fingerprint)
         fingerprint = ":".join(a + b for a, b in zip(it, it))
 
-        known_hosts_path = os.path.expanduser(
-            "~/.config/usbip-gui/known_hosts.json"
-        )
+        known_hosts_path = get_config_dir() / "known_hosts.json"
         known_hosts = {}
         if os.path.exists(known_hosts_path):
             with open(known_hosts_path, "r", encoding="utf-8") as f:

@@ -8,6 +8,7 @@ import os
 import subprocess
 import hashlib
 import errno
+import sys
 
 
 def get_cert_paths() -> tuple[str, str]:
@@ -17,7 +18,17 @@ def get_cert_paths() -> tuple[str, str]:
     Returns:
         tuple[str, str]: A tuple containing the certificate path and key path.
     """
-    config_dir = os.path.expanduser("~/.config/usbip-gui")
+
+    if sys.platform == "win32":
+        base_dir = os.environ.get("APPDATA") or os.path.join(
+            os.path.expanduser("~"), "AppData", "Roaming"
+        )
+    else:
+        base_dir = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser(
+            "~/.config"
+        )
+
+    config_dir = os.path.join(base_dir, "usbip-gui")
     os.makedirs(config_dir, exist_ok=True)
     return os.path.join(config_dir, "server.crt"), os.path.join(
         config_dir, "server.key"

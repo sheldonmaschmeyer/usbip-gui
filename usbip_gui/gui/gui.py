@@ -1,13 +1,13 @@
 """Main graphical user interface implementation and window management."""
 
-from tkinter import Tk
+from tkinter import Tk, BooleanVar, StringVar, TclError
 from tkinter.ttk import Notebook, Label, Style
 import tkinter.font as tkfont
 import os
 import subprocess
 from typing import Protocol, Literal
 
-from .common import DEFAULT_GEOMETRY, get_translator
+from .common import DEFAULT_GEOMETRY, get_translator, load_config, save_config
 from .server import ServerTab
 from .client import ClientTab
 from .menu import create_main_menu
@@ -31,8 +31,6 @@ class UsbIpGui:
         self.root.wm_title(t("USB/IP Manager"))
         self.root.geometry(DEFAULT_GEOMETRY)
 
-        create_main_menu(self.root)
-
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(0, weight=1)
 
@@ -42,12 +40,77 @@ class UsbIpGui:
         self.server_tab = ServerTab(self.notebook)
         self.client_tab = ClientTab(self.notebook)
 
-        self.notebook.add(
-            self.server_tab.frame, text=t("Server (Local USB Devices)")
+        config = load_config()
+        self.show_server_var = BooleanVar(
+            value=config.get("show_server", True)
         )
-        self.notebook.add(
-            self.client_tab.frame, text=t("Client (Remote USB Devices)")
+        self.show_client_var = BooleanVar(
+            value=config.get("show_client", True)
         )
+        self.default_tab_var = StringVar(
+            value=config.get("default_tab", "server")
+        )
+
+        self.update_tabs()
+        self.apply_default_tab()
+
+        create_main_menu(self)
+
+    def update_tabs(self) -> None:
+        """Update visible tabs based on settings."""
+        current_tab = None
+        try:
+            current_tab = self.notebook.select()  # type: ignore
+        except TclError:
+            pass
+
+        # Hide both to ensure correct order when re-adding
+        try:
+            self.notebook.forget(self.server_tab.frame)  # type: ignore
+        except TclError:
+            pass
+        try:
+            self.notebook.forget(self.client_tab.frame)  # type: ignore
+        except TclError:
+            pass
+
+        if self.show_server_var.get():
+            self.notebook.add(
+                self.server_tab.frame, text=t("Server (Local USB Devices)")
+            )
+        if self.show_client_var.get():
+            self.notebook.add(
+                self.client_tab.frame, text=t("Client (Remote USB Devices)")
+            )
+
+        try:
+            if current_tab in self.notebook.tabs():  # type: ignore
+                self.notebook.select(current_tab)  # type: ignore
+        except Exception:  # pylint: disable=broad-exception-caught
+            pass
+
+        self.save_settings()
+
+    def apply_default_tab(self) -> None:
+        """Select default tab."""
+        if (
+            self.default_tab_var.get() == "server"
+            and self.show_server_var.get()
+        ):
+            self.notebook.select(self.server_tab.frame)  # type: ignore
+        elif (
+            self.default_tab_var.get() == "client"
+            and self.show_client_var.get()
+        ):
+            self.notebook.select(self.client_tab.frame)  # type: ignore
+
+    def save_settings(self) -> None:
+        """Save settings to config file."""
+        config = load_config()
+        config["show_server"] = self.show_server_var.get()
+        config["show_client"] = self.show_client_var.get()
+        config["default_tab"] = self.default_tab_var.get()
+        save_config(config)
 
 
 def start_app():

@@ -1,7 +1,7 @@
 """Main application menu bar implementation."""
 
-import tkinter as tk
 from tkinter import Menu
+from typing import Any
 from ..common import get_translator
 from .about import show_about_dialog
 from .language_switcher import toggle_language
@@ -9,9 +9,11 @@ from .language_switcher import toggle_language
 t = get_translator("menu")
 
 
-def create_main_menu(root: tk.Tk | tk.Toplevel):
+def create_main_menu(app: Any):
     """Create main menu."""
+    root = app.root
     bg = "#1e1e2e"
+    menu_bg = "#313244"
     fg = "#cdd6f4"
     abg = "#45475a"
     afg = "#cdd6f4"
@@ -29,11 +31,12 @@ def create_main_menu(root: tk.Tk | tk.Toplevel):
     filemenu = Menu(
         menubar,
         tearoff=0,
-        bg=bg,
+        bg=menu_bg,
         fg=fg,
         activebackground=abg,
         activeforeground=afg,
-        borderwidth=bw,
+        borderwidth=1,
+        relief="solid",
     )
     filemenu.add_command(
         label=t("About"), command=lambda: show_about_dialog(root)
@@ -42,6 +45,66 @@ def create_main_menu(root: tk.Tk | tk.Toplevel):
     filemenu.add_command(label=t("Close"), command=root.quit)
 
     menubar.add_cascade(label=t("File"), menu=filemenu)
+
+    viewmenu = Menu(
+        menubar,
+        tearoff=0,
+        bg=menu_bg,
+        fg=fg,
+        activebackground=abg,
+        activeforeground=afg,
+        borderwidth=1,
+        relief="solid",
+    )
+
+    tabsmenu = Menu(
+        viewmenu,
+        tearoff=0,
+        bg=menu_bg,
+        fg=fg,
+        activebackground=abg,
+        activeforeground=afg,
+        borderwidth=1,
+        relief="solid",
+    )
+    tabsmenu.add_checkbutton(
+        label=t("Server"),
+        variable=app.show_server_var,
+        command=app.update_tabs,
+    )
+    tabsmenu.add_checkbutton(
+        label=t("Client"),
+        variable=app.show_client_var,
+        command=app.update_tabs,
+    )
+
+    defaulttabmenu = Menu(
+        viewmenu,
+        tearoff=0,
+        bg=menu_bg,
+        fg=fg,
+        activebackground=abg,
+        activeforeground=afg,
+        borderwidth=1,
+        relief="solid",
+    )
+    defaulttabmenu.add_radiobutton(
+        label=t("Server"),
+        variable=app.default_tab_var,
+        value="server",
+        command=app.save_settings,
+    )
+    defaulttabmenu.add_radiobutton(
+        label=t("Client"),
+        variable=app.default_tab_var,
+        value="client",
+        command=app.save_settings,
+    )
+
+    viewmenu.add_cascade(label=t("Visible Tabs"), menu=tabsmenu)
+    viewmenu.add_cascade(label=t("Default Tab"), menu=defaulttabmenu)
+
+    menubar.add_cascade(label=t("View"), menu=viewmenu)
 
     # Add Language toggle directly to the menu bar
     menubar.add_command(label="EN / FR", command=toggle_language)
