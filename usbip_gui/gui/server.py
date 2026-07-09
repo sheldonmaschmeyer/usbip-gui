@@ -35,7 +35,7 @@ def init_usbip_server(
     port: int = 3240,
     secure: bool = False,
     password: str = "",
-    bind_host: str = "127.0.0.1",
+    bind_host: str = "0.0.0.0",
 ):
     """Init usbip server."""
     subprocess.run(["sudo", "pkill", "usbipd"], check=False)
@@ -245,7 +245,7 @@ class ServerTab:
             self.local_control_frame, text=t("Bind IP")
         )
         self.local_bind_ip_input = Entry(self.local_control_frame, width=12)
-        self.local_bind_ip_input.insert(0, "127.0.0.1")
+        self.local_bind_ip_input.insert(0, "0.0.0.0")
 
         self.local_list_label.grid(column=0, row=0, padx=10)
         self.local_port_label.grid(column=1, row=0, padx=(10, 0), sticky="e")
@@ -324,7 +324,7 @@ class ServerTab:
                 t("Error"), t("Password required for secure connection")
             )
             return
-        bind_host = self.local_bind_ip_input.get().strip() or "127.0.0.1"
+        bind_host = self.local_bind_ip_input.get().strip() or "0.0.0.0"
         init_usbip_server(port, secure, password, bind_host)
 
     def bind_local(self):
