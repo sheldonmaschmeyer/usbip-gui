@@ -153,7 +153,7 @@ developing or contributing, the following commands are available:
 - [x] Move code into modules, i.e. compartmentalize sections of the gui.py.
 - [ ] Optional: Windows compatibility; pixi without docker.
 - [ ] Optional: Windows installer version, fully packaged.
-- [ ] Cross-architecture (ARM and x86) production testing.
+- [x] Cross-architecture (ARM and x86) production testing.
 - [x] Look at K-Francis-H's remaining TODOs.
 
 ## Screenshots
