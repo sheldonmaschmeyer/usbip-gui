@@ -209,7 +209,7 @@ def start_app():
 
     loading_label = Label(
         root,
-        text="Loading...\\n--------------\\nChargement...",
+        text="Loading...\n--------------\nChargement...",
         font=("Sans Serif", 24),
     )
     loading_label.pack(expand=True)
