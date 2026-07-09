@@ -56,11 +56,6 @@ msgstr ""
 "\n"
 "Do you want to accept this connection?"
 
-msgid "cert_regen"
-msgstr "Certificate regenerated successfully. Please restart the server."
-
-msgid "insecure_warning_msg"
-msgstr "Disabling Secure mode is not recommended over the internet."
-
 msgid "auth_failed_msg"
 msgstr "Authentication failed. Please check your password."
+

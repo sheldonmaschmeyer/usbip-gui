@@ -79,3 +79,7 @@ msgstr "Vérification du certificat"
 
 msgid "Warning"
 msgstr "Avertissement"
+
+msgid "insecure_warning_msg"
+msgstr "Il n'est pas recommandé de désactiver le mode Sécurisé sur Internet."
+

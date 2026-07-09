@@ -49,8 +49,6 @@ msgstr ""
 msgid "attached_detach_tooltip"
 msgstr "Détacher le périphérique USB distant sélectionné de cet ordinateur"
 
-msgid "cert_regen"
-msgstr "Certificat régénéré avec succès. Veuillez redémarrer le serveur."
 
 msgid "cert_fingerprint_msg"
 msgstr ""
@@ -60,8 +58,6 @@ msgstr ""
 "\n"
 "Voulez-vous accepter cette connexion ?"
 
-msgid "insecure_warning_msg"
-msgstr "Il n'est pas recommandé de désactiver le mode Sécurisé sur Internet."
 
 msgid "auth_failed_msg"
 msgstr "Échec de l'authentification. Veuillez vérifier votre mot de passe."

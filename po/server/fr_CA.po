@@ -52,3 +52,7 @@ msgstr "Associer le périphérique USB local sélectionné pour le partager"
 msgid "local_unbind_tooltip"
 msgstr ""
 "Dissocier le périphérique USB local sélectionné pour ne plus le partager"
+
+msgid "cert_regen"
+msgstr "Certificat régénéré avec succès. Veuillez redémarrer le serveur."
+
