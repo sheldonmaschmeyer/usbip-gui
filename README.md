@@ -12,6 +12,7 @@
   - [Tasks](#tasks)
   - [Screenshots](#screenshots)
   - [References](#references)
+  - [Donations](#donations)
   - [License](#license)
 
 This is a fork of K-Francis-H's `usbip-gui`, created to integrate SSL/SSH
@@ -182,6 +183,13 @@ Figure 6: French About
 
 ## References
 [Original K-Francis-H's README](https://github.com/K-Francis-H/usbip-gui/blob/main/README.md)
+
+## Donations
+
+[![Donate with PayPal](https://img.shields.io/badge/Donate-PayPal-blue.svg?logo=paypal&style=flat-
+  square)](https://paypal.me/sheldonmaschmeyer)
+
+Thank you 😀
 
 ## License
 This project is licensed under the GPL-3.0 License - see the [LICENSE](LICENSE)
