@@ -5,6 +5,7 @@ from tkinter.ttk import Notebook, Label, Style
 import tkinter.font as tkfont
 import os
 import subprocess
+import sys
 from typing import Protocol, Literal
 
 from .common import DEFAULT_GEOMETRY, get_translator, load_config, save_config
@@ -28,8 +29,6 @@ class UsbIpGui:
     def __init__(self, root: Tk):
         """Initialize the class instance."""
         self.root = root
-        self.root.wm_title(t("USB/IP Manager"))
-        self.root.geometry(DEFAULT_GEOMETRY)
 
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(0, weight=1)
@@ -55,6 +54,58 @@ class UsbIpGui:
         self.apply_default_tab()
 
         create_main_menu(self)
+        
+        from . import common
+        self.base_scale = common.APP_SCALE
+        self.zoom_level = 1.0
+        
+        self.root.bind("<Control-plus>", self.zoom_in)
+        self.root.bind("<Control-equal>", self.zoom_in)
+        self.root.bind("<Control-KP_Add>", self.zoom_in)
+        self.root.bind("<Control-minus>", self.zoom_out)
+        self.root.bind("<Control-KP_Subtract>", self.zoom_out)
+        self.root.bind("<Control-0>", self.zoom_reset)
+        
+        Style(self.root).configure("TScrollbar", width=int(15 * self.base_scale), arrowsize=int(15 * self.base_scale))
+
+    def apply_zoom(self, zoom: float):
+        self.zoom_level = zoom
+        total_scale = self.base_scale * self.zoom_level
+        
+        from . import common
+        common.APP_SCALE = total_scale
+        
+        base_width, base_height = map(int, common.DEFAULT_GEOMETRY.split('x'))
+        scaled_w = int(base_width * total_scale)
+        scaled_h = int(base_height * total_scale)
+        self.root.geometry(f"{scaled_w}x{scaled_h}")
+
+        style = Style(self.root)
+        style.configure("Treeview", rowheight=int(28 * total_scale))
+        style.configure("TButton", padding=int(5 * total_scale))
+        style.configure("TCheckbutton", indicatorsize=int(16 * total_scale), indicatormargin=int(4 * total_scale))
+        style.configure("TEntry", padding=int(4 * total_scale))
+        style.configure("TNotebook.Tab", padding=[int(10 * total_scale), int(5 * total_scale)])
+        style.configure("TScrollbar", width=int(15 * total_scale), arrowsize=int(15 * total_scale))
+
+        tkfont.nametofont("TkDefaultFont").configure(size=int(-15 * total_scale))
+        tkfont.nametofont("TkHeadingFont").configure(size=int(-16 * total_scale))
+        tkfont.nametofont("TkTextFont").configure(size=int(-15 * total_scale))
+        style.configure("Treeview", font=("sans-serif", int(-15 * total_scale), "bold"))
+        style.configure("Treeview.Heading", font=("sans-serif", int(-16 * total_scale), "bold"))
+        
+        self.root.option_add("*Menu.font", f"sans-serif {int(-15 * total_scale)} bold")
+        from .menu import create_main_menu
+        create_main_menu(self)
+
+    def zoom_in(self, event=None):
+        self.apply_zoom(self.zoom_level + 0.25)
+        
+    def zoom_out(self, event=None):
+        self.apply_zoom(max(0.5, self.zoom_level - 0.25))
+        
+    def zoom_reset(self, event=None):
+        self.apply_zoom(1.0)
 
     def update_tabs(self) -> None:
         """Update visible tabs based on settings."""
@@ -113,11 +164,42 @@ class UsbIpGui:
         save_config(config)
 
 
+def enable_4k_scaling():
+    """Enable 4K scaling."""
+    # 1. Tell Windows/macOS to use native monitor resolution (DPI Aware)
+    if sys.platform.startswith("win"):
+        import ctypes
+        try:
+            # For Windows 8.1 and Windows 10/11
+            ctypes.windll.shcore.SetProcessDpiAwareness(2) # 2 = Process_Per_Monitor_DPI_Aware
+        except Exception:
+            # Fallback for Windows 7/8
+            ctypes.windll.user32.SetProcessDPIAware()
+
+    # 2. Initialize a temporary root to read system metrics
+    root = Tk()
+    
+    # Calculate the system scaling factor relative to baseline (72 DPI)
+    # A standard 4K screen with 150% Windows scaling will report roughly 1.5 - 2.0
+    scaling_factor = root.winfo_fpixels('1i') / 72
+    
+    # Apply scaling factor to Tkinter's font and widget engine
+    root.tk.call('tk', 'scaling', scaling_factor)
+    
+    return root, scaling_factor
+
+
 def start_app():
     """Start app."""
-    root = Tk()
+    root, app_scale = enable_4k_scaling()
+    from . import common
+    common.APP_SCALE = app_scale
     root.wm_title(t("USB/IP Manager"))
-    root.geometry(DEFAULT_GEOMETRY)
+    
+    base_width, base_height = map(int, DEFAULT_GEOMETRY.split('x'))
+    scaled_w = int(base_width * app_scale)
+    scaled_h = int(base_height * app_scale)
+    root.geometry(f"{scaled_w}x{scaled_h}")
 
     style = Style(root)
     if "clam" in style.theme_names():
@@ -161,6 +243,7 @@ def start_app():
         adder.option_add("*Menu.activeForeground", fg_color)
         adder.option_add("*Menu.activeBorderWidth", 0)
         adder.option_add("*Menu.borderWidth", 0)
+        adder.option_add("*Menu.font", f"sans-serif {int(-15 * app_scale)} bold")
 
     configure_menu_options(root)
 
@@ -177,12 +260,24 @@ def start_app():
     )
 
     style.configure(
+        "TScrollbar",
+        background=button_bg,
+        troughcolor=bg_color,
+        bordercolor=bg_color,
+        arrowcolor=fg_color,
+    )
+    style.map(
+        "TScrollbar",
+        background=[("active", button_active_bg), ("pressed", select_bg)],
+    )
+
+    style.configure(
         "Treeview",
         background=input_bg,
         fieldbackground=input_bg,
         foreground=fg_color,
         borderwidth=0,
-        rowheight=28,
+        rowheight=int(28 * app_scale),
     )
     style.map(
         "Treeview",
@@ -207,7 +302,7 @@ def start_app():
         borderwidth=0,
         focuscolor=bg_color,
         relief="flat",
-        padding=5,
+        padding=int(5 * app_scale),
     )
     style.map(
         "TButton",
@@ -220,6 +315,8 @@ def start_app():
         background=bg_color,
         foreground=fg_color,
         focuscolor=bg_color,
+        indicatorsize=int(16 * app_scale),
+        indicatormargin=int(4 * app_scale),
     )
     style.map(
         "TCheckbutton",
@@ -235,7 +332,7 @@ def start_app():
         bordercolor=border_color,
         lightcolor=bg_color,
         darkcolor=bg_color,
-        padding=4,
+        padding=int(4 * app_scale),
         insertcolor=fg_color,
     )
 
@@ -248,7 +345,7 @@ def start_app():
         "TNotebook.Tab",
         background=button_bg,
         foreground=fg_color,
-        padding=[10, 5],
+        padding=[int(10 * app_scale), int(5 * app_scale)],
         borderwidth=0,
     )
     style.map(
@@ -258,22 +355,22 @@ def start_app():
     )
 
     default_font = tkfont.nametofont("TkDefaultFont")
-    default_font.configure(family="Ubuntu", size=11, weight="bold")
+    default_font.configure(family="sans-serif", size=int(-15 * app_scale), weight="bold")
 
     heading_font = tkfont.nametofont("TkHeadingFont")
-    heading_font.configure(family="Ubuntu", size=12, weight="bold")
+    heading_font.configure(family="sans-serif", size=int(-16 * app_scale), weight="bold")
 
     text_font = tkfont.nametofont("TkTextFont")
-    text_font.configure(family="Ubuntu", size=11, weight="bold")
+    text_font.configure(family="sans-serif", size=int(-15 * app_scale), weight="bold")
 
     style.configure(".", font="TkDefaultFont")
-    style.configure("Treeview", font=("Ubuntu", 11, "bold"))
-    style.configure("Treeview.Heading", font=("Ubuntu", 12, "bold"))
+    style.configure("Treeview", font=("sans-serif", int(-15 * app_scale), "bold"))
+    style.configure("Treeview.Heading", font=("sans-serif", int(-16 * app_scale), "bold"))
 
     loading_label = Label(
         root,
         text="Loading...\n--------------\nChargement...",
-        font=("Sans Serif", 24),
+        font=("sans-serif", int(-32 * app_scale)),
     )
     loading_label.pack(expand=True)
     root.update()

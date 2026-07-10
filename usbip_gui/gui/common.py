@@ -14,6 +14,7 @@ VERSION = "1.2.0"
 
 USBIPD_PORT = 3240
 DEFAULT_GEOMETRY = "1400x842"
+APP_SCALE = 1.0
 
 JsonValue = Union[
     str, int, float, bool, None, Dict[str, "JsonValue"], List["JsonValue"]
@@ -138,8 +139,8 @@ class ToolTip:
         """Show tooltip."""
         if self.tooltip_window or not self.text:
             return
-        x = self.widget.winfo_rootx() + 25
-        y = self.widget.winfo_rooty() + 20
+        x = self.widget.winfo_rootx() + int(25 * APP_SCALE)
+        y = self.widget.winfo_rooty() + int(20 * APP_SCALE)
         self.tooltip_window = tw = tk.Toplevel(self.widget)
         tw.wm_overrideredirect(True)
         tw.wm_geometry(f"+{x}+{y}")
@@ -152,9 +153,9 @@ class ToolTip:
             foreground="#cdd6f4",
             relief="solid",
             borderwidth=1,
-            font=("Ubuntu", 10),
+            font=("sans-serif", int(-15 * APP_SCALE)),
         )
-        label.pack(ipadx=5, ipady=3)
+        label.pack(ipadx=int(5 * APP_SCALE), ipady=int(3 * APP_SCALE))
 
     def hide_tooltip(self, _event: Optional[tk.Event] = None) -> None:
         """Hide tooltip."""

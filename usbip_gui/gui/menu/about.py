@@ -2,7 +2,7 @@
 
 import tkinter as tk
 from tkinter.ttk import Button
-from ..common import VERSION, get_translator
+from ..common import VERSION, get_translator, APP_SCALE
 
 t = get_translator("menu")
 
@@ -11,7 +11,8 @@ def show_about_dialog(parent: tk.Tk | tk.Toplevel | None = None):
     """Show about dialog."""
     dialog = tk.Toplevel(parent)
     dialog.title(t("About"))
-    dialog.geometry("500x250")
+    scaled_w, scaled_h = int(500 * APP_SCALE), int(250 * APP_SCALE)
+    dialog.geometry(f"{scaled_w}x{scaled_h}")
     dialog.configure(bg="#1e1e2e")
     dialog.resizable(False, False)
 
@@ -32,7 +33,7 @@ def show_about_dialog(parent: tk.Tk | tk.Toplevel | None = None):
         text=about_text,
         bg="#1e1e2e",
         fg="#cdd6f4",
-        font=("Ubuntu", 11, "bold"),
+        font=("sans-serif", int(-15 * APP_SCALE), "bold"),
         justify="center",
     )
     label.pack(expand=True, padx=20, pady=20)
