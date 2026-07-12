@@ -35,3 +35,21 @@ msgstr ""
 
 msgid "USB/IP Manager"
 msgstr ""
+
+msgid "Powered by PyQt6 and USB/IP"
+msgstr ""
+
+msgid "View"
+msgstr ""
+
+msgid "Visible Tabs"
+msgstr ""
+
+msgid "Server"
+msgstr ""
+
+msgid "Client"
+msgstr ""
+
+msgid "Default Tab"
+msgstr ""

@@ -35,3 +35,21 @@ msgstr "Mainteneur du fork"
 
 msgid "USB/IP Manager"
 msgstr "Gestionnaire USB/IP"
+
+msgid "Powered by PyQt6 and USB/IP"
+msgstr "Propulsé par PyQt6 et USB/IP"
+
+msgid "View"
+msgstr "Affichage"
+
+msgid "Visible Tabs"
+msgstr "Onglets visibles"
+
+msgid "Server"
+msgstr "Serveur"
+
+msgid "Client"
+msgstr "Client"
+
+msgid "Default Tab"
+msgstr "Onglet par défaut"

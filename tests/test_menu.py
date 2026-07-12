@@ -31,20 +31,41 @@ def test_create_main_menu_defaults(
     create_main_menu(mock_app)
 
 
-@patch("usbip_gui.gui.menu.about.QMessageBox.about")
-def test_show_about(mock_about: MagicMock):
+@patch("usbip_gui.gui.menu.about.QDialog")
+@patch("usbip_gui.gui.menu.about.QVBoxLayout")
+@patch("usbip_gui.gui.menu.about.QLabel")
+@patch("usbip_gui.gui.menu.about.QDialogButtonBox")
+@patch("usbip_gui.gui.menu.about.connect_signal")
+def test_show_about(
+    _mock_connect: MagicMock,
+    _mock_button_box: MagicMock,
+    _mock_label: MagicMock,
+    _mock_layout: MagicMock,
+    mock_qdialog: MagicMock,
+):
     """Test the about dialog popup."""
     show_about_dialog()
-    mock_about.assert_called_once()
+    mock_qdialog.assert_called_once()
+    mock_qdialog.return_value.exec.assert_called_once()
 
 
-@patch("usbip_gui.gui.menu.about.QMessageBox.about")
-def test_show_about_with_parent(mock_about: MagicMock):
+@patch("usbip_gui.gui.menu.about.QDialog")
+@patch("usbip_gui.gui.menu.about.QVBoxLayout")
+@patch("usbip_gui.gui.menu.about.QLabel")
+@patch("usbip_gui.gui.menu.about.QDialogButtonBox")
+@patch("usbip_gui.gui.menu.about.connect_signal")
+def test_show_about_with_parent(
+    _mock_connect: MagicMock,
+    _mock_button_box: MagicMock,
+    _mock_label: MagicMock,
+    _mock_layout: MagicMock,
+    mock_qdialog: MagicMock,
+):
     """Test show about dialog with parent."""
     parent = MagicMock()
     show_about_dialog(parent)
-    mock_about.assert_called_once()
-    assert mock_about.call_args[0][0] == parent
+    mock_qdialog.assert_called_once_with(parent)
+    mock_qdialog.return_value.exec.assert_called_once()
 
 
 @patch("usbip_gui.gui.menu.language_switcher.os.execv")
