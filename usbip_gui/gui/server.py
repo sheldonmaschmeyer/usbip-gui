@@ -191,7 +191,7 @@ class ServerTab(QWidget):
         self.local_password_input.setFixedWidth(150)
 
         self.local_server_restart_button = QPushButton(
-            t("Apply Port & Restart")
+            t("apply_port_restart")
         )
         self.local_server_restart_button.setToolTip(t("local_restart_tooltip"))
         connect_signal(
