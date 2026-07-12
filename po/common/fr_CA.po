@@ -56,7 +56,7 @@ msgstr "Port "
 msgid "Secure"
 msgstr "Sécurisé"
 
-msgid "Apply Port & Restart"
+msgid "apply_port_restart"
 msgstr "Appliquer le port et redémarrer"
 
 msgid "Show Fingerprint"

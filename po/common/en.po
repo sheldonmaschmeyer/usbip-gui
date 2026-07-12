@@ -56,3 +56,5 @@ msgstr ""
 msgid "insecure_warning_msg"
 msgstr "Disabling Secure mode is not recommended over the internet."
 
+msgid "apply_port_restart"
+msgstr "Apply Port && Restart"

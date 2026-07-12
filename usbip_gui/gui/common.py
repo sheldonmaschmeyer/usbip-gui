@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import QTreeWidgetItem
 VERSION = "1.2.0"
 
 USBIPD_PORT = 3240
-DEFAULT_GEOMETRY = "1400x842"
+DEFAULT_GEOMETRY = "900x842"
 
 JsonValue = Union[
     str, int, float, bool, None, Dict[str, "JsonValue"], List["JsonValue"]
