@@ -29,6 +29,12 @@ checks makes it unreliable. Since `usbip` is fully open-source and free of
 licensing restrictions, this fork seeks to provide a simplified, faster, and
 more dependable secure USB sharing experience.
 
+Additionally, this fork has migrated the GUI framework from Tkinter to Qt
+(PyQt6). This modernization provides a significantly improved user experience,
+featuring superior font rendering quality and native 4K high-DPI scaling out of
+the box, eliminating the need for the cumbersome custom magnification code that
+Tkinter previously required.
+
 ## Docker
 
 I prefer using Docker rather than integrating directly onto the host system to
@@ -122,8 +128,8 @@ the `linux-tools-generic` package. The Docker container operates with
 If you prefer to run the application directly on your host system without
 Docker:
 
-1. Ensure you have the system dependencies installed: `python3-tk`,
-   `linux-tools-generic`, and `hwdata`.
+1. Ensure you have the system dependencies installed: `linux-tools-generic`
+   and `hwdata`.
 2. Ensure you have [pixi](https://pixi.sh/) installed.
 3. Start the application by running:
    ```zsh
@@ -158,27 +164,27 @@ developing or contributing, the following commands are available:
 - [x] Look at K-Francis-H's remaining TODOs.
 
 ## Screenshots
-![screenshot of usbip_manager_v1.1.0_en_server](screenshots/usbip_manager_v1.1.0_en_server.png)
+![screenshot of usbip_manager_v1.2.0_en_server](screenshots/usbip_manager_v1.2.0_en_server.png)
 
 Figure 1: English Server
 
-![screenshot of usbip_manager_v1.1.0_en_client](screenshots/usbip_manager_v1.1.0_en_client.png)
+![screenshot of usbip_manager_v1.2.0_en_client](screenshots/usbip_manager_v1.2.0_en_client.png)
 
 Figure 2: English Client
 
-![screenshot of usbip_manager_v1.1.0_en_about](screenshots/usbip_manager_v1.1.0_en_about.png)
+![screenshot of usbip_manager_v1.2.0_en_about](screenshots/usbip_manager_v1.2.0_en_about.png)
 
 Figure 3: English About
 
-![screenshot of usbip_manager_v1.1.0_fr_server](screenshots/usbip_manager_v1.1.0_fr_server.png)
+![screenshot of usbip_manager_v1.2.0_fr_server](screenshots/usbip_manager_v1.2.0_fr_server.png)
 
 Figure 4: French Server
 
-![screenshot of usbip_manager_v1.1.0_fr_client](screenshots/usbip_manager_v1.1.0_fr_client.png)
+![screenshot of usbip_manager_v1.2.0_fr_client](screenshots/usbip_manager_v1.2.0_fr_client.png)
 
 Figure 5: French Client
 
-![screenshot of usbip_manager_v1.1.0_fr_about](screenshots/usbip_manager_v1.1.0_fr_about.png)
+![screenshot of usbip_manager_v1.2.0_fr_about](screenshots/usbip_manager_v1.2.0_fr_about.png)
 
 Figure 6: French About
 
