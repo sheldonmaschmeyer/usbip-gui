@@ -2,12 +2,16 @@
 
 from pathlib import Path
 from unittest.mock import patch, MagicMock
+from PyQt6.QtWidgets import QTreeWidget
 from usbip_gui.gui.common import (
     TunnelState,
     cleanup_tunnels,
     tunnel_state,
     get_translator,
     get_config_dir,
+    load_config,
+    save_config,
+    SortableTreeWidgetItem,
 )
 
 
@@ -115,3 +119,44 @@ def test_get_config_dir_linux_xdg(mock_sys: MagicMock, _mock_mkdir: MagicMock):
 
     config_dir = get_config_dir()
     assert config_dir == Path("/mock/xdg/usbip-gui")
+
+
+@patch("usbip_gui.gui.common.open")
+@patch("usbip_gui.gui.common.get_config_path")
+def test_load_config_exception(mock_path: MagicMock, mock_open: MagicMock):
+    """Test load_config exception handling."""
+    mock_path.return_value.exists.return_value = True
+    mock_open.side_effect = Exception("test")
+    assert load_config() == {}
+
+
+@patch("usbip_gui.gui.common.open")
+@patch("usbip_gui.gui.common.get_config_path")
+def test_save_config_exception(_mock_path: MagicMock, mock_open: MagicMock):
+    """Test save_config exception handling."""
+    mock_open.side_effect = Exception("test")
+    save_config({"test": "data"})  # should not raise
+
+
+def test_sortable_tree_widget_item_no_tree():
+    """Test SortableTreeWidgetItem without a tree widget."""
+    item1 = SortableTreeWidgetItem(["1-10"])
+    item2 = SortableTreeWidgetItem(["1-3"])
+    # Without a tree, it falls back to string comparison, where "1-10" < "1-3"
+    assert item1 < item2
+    assert item2 >= item1
+
+
+@patch("usbip_gui.gui.common.re.split")
+def test_sortable_tree_widget_item_type_error(mock_split: MagicMock):
+    """Test SortableTreeWidgetItem fallback on TypeError."""
+    tree = QTreeWidget()
+    tree.setColumnCount(1)
+    item1 = SortableTreeWidgetItem(["1-10"])
+    item2 = SortableTreeWidgetItem(["1-3"])
+    tree.addTopLevelItem(item1)
+    tree.addTopLevelItem(item2)
+    mock_split.side_effect = TypeError("Mocked TypeError")
+    # It will fallback to super().__lt__,
+    # which uses standard string comparison ("1-10" < "1-3") -> True
+    assert item1 < item2
