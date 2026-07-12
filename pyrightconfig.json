@@ -4,8 +4,4 @@
   "venvPath": ".pixi/envs",
   "venv": "default",
   "reportUnknownMemberType": false,
-  "reportUnknownArgumentType": false,
-  "reportUnknownParameterType": false,
-  "reportOptionalMemberAccess": false,
-  "reportCallIssue": false
 }
