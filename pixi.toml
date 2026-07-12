@@ -7,6 +7,9 @@ version = "1.1.0"
 [dependencies]
 python = ">=3.10"
 
+[pypi-dependencies]
+PyQt6 = "*"
+
 [feature.dev.dependencies]
 flake8 = "*"
 black = "*"
@@ -22,4 +25,4 @@ default = ["dev"]
 usbip = "python3 -m usbip_gui.main"
 lint = "python3 -m flake8 . && python3 -m pylint . && python3 -m pyright . && python3 -m mypy ."
 format = "python3 -m black ."
-test = "PYTHONPATH=. python3 -m pytest tests/ -v --cov=usbip_gui --cov-report=html --cov-report=term"
+test = { cmd = "PYTHONPATH=. python3 -m pytest tests/ -v --cov=usbip_gui --cov-report=html --cov-report=term", env = { QT_QPA_PLATFORM = "offscreen" } }

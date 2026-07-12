@@ -5,6 +5,13 @@
 		}
 	],
 	"settings": {
+		"python-envs.pythonProjects": [
+			{
+				"path": ".",
+				"envManager": "ms-python.python:system",
+				"packageManager": "ms-python.python:pip"
+			}
+  	],
     "python.analysis.extraPaths": ["./usbip-gui"],
     "pylint.args": [
         "--init-hook=import sys; sys.path.append('./usbip-gui')"

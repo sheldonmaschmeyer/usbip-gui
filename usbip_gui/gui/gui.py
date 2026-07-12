@@ -1,11 +1,11 @@
 """Main graphical user interface implementation and window management."""
 
-from tkinter import Tk, BooleanVar, StringVar, TclError
-from tkinter.ttk import Notebook, Label, Style
-import tkinter.font as tkfont
 import os
 import subprocess
-from typing import Protocol, Literal
+import sys
+
+from PyQt6.QtWidgets import QApplication, QMainWindow, QTabWidget
+from PyQt6.QtGui import QAction
 
 from .common import DEFAULT_GEOMETRY, get_translator, load_config, save_config
 from .server import ServerTab
@@ -18,265 +18,111 @@ t = get_translator("gui")
 class UsbIpGui:
     """
     Main application class for the USB/IP GUI manager.
-
-    This class encapsulates the main Tkinter window (root), style
-    configurations, and notebook tabs (Server and Client). It replaces the
-    previous architecture that relied on global variables, providing a clean,
-    object-oriented state management system for the UI components.
     """
 
-    def __init__(self, root: Tk):
+    server_visible_action: QAction | None
+    client_visible_action: QAction | None
+    server_default_action: QAction | None
+    client_default_action: QAction | None
+    show_server_var: bool
+    show_client_var: bool
+    default_tab_var: str
+
+    def __init__(self, root: QMainWindow):
         """Initialize the class instance."""
         self.root = root
-        self.root.wm_title(t("USB/IP Manager"))
-        self.root.geometry(DEFAULT_GEOMETRY)
+        self.root.setWindowTitle(t("USB/IP Manager"))
 
-        self.root.columnconfigure(0, weight=1)
-        self.root.rowconfigure(0, weight=1)
+        self.server_visible_action = None
+        self.client_visible_action = None
+        self.server_default_action = None
+        self.client_default_action = None
 
-        self.notebook = Notebook(self.root)
-        self.notebook.grid(column=0, row=0, sticky="nsew", padx=10, pady=10)
+        geom = DEFAULT_GEOMETRY.split("x")
+        if len(geom) == 2:
+            self.root.resize(int(geom[0]), int(geom[1]))
 
-        self.server_tab = ServerTab(self.notebook)
-        self.client_tab = ClientTab(self.notebook)
+        self.notebook = QTabWidget(self.root)
+        self.root.setCentralWidget(self.notebook)
+
+        self.server_tab = ServerTab()
+        self.client_tab = ClientTab()
 
         config = load_config()
-        self.show_server_var = BooleanVar(
-            value=bool(config.get("show_server", True))
-        )
-        self.show_client_var = BooleanVar(
-            value=bool(config.get("show_client", True))
-        )
-        self.default_tab_var = StringVar(
-            value=str(config.get("default_tab", "server"))
-        )
+        self.show_server_var = bool(config.get("show_server", True))
+        self.show_client_var = bool(config.get("show_client", True))
+        self.default_tab_var = str(config.get("default_tab", "server"))
+
+        create_main_menu(self)
 
         self.update_tabs()
         self.apply_default_tab()
 
-        create_main_menu(self)
-
     def update_tabs(self) -> None:
         """Update visible tabs based on settings."""
-        current_tab = None
-        try:
-            current_tab = self.notebook.select()  # type: ignore
-        except TclError:
-            pass
+        # Get actions from self if they exist
+        if self.server_visible_action:
+            self.show_server_var = self.server_visible_action.isChecked()
+        if self.client_visible_action:
+            self.show_client_var = self.client_visible_action.isChecked()
 
-        # Hide both to ensure correct order when re-adding
-        try:
-            self.notebook.forget(self.server_tab.frame)  # type: ignore
-        except TclError:
-            pass
-        try:
-            self.notebook.forget(self.client_tab.frame)  # type: ignore
-        except TclError:
-            pass
+        current_idx = self.notebook.currentIndex()
+        current_widget = (
+            self.notebook.widget(current_idx) if current_idx >= 0 else None
+        )
 
-        if self.show_server_var.get():
-            self.notebook.add(
-                self.server_tab.frame, text=t("Server (Local USB Devices)")
+        self.notebook.clear()
+
+        if self.show_server_var:
+            self.notebook.addTab(
+                self.server_tab, t("Server (Local USB Devices)")
             )
-        if self.show_client_var.get():
-            self.notebook.add(
-                self.client_tab.frame, text=t("Client (Remote USB Devices)")
+        if self.show_client_var:
+            self.notebook.addTab(
+                self.client_tab, t("Client (Remote USB Devices)")
             )
 
-        try:
-            if current_tab in self.notebook.tabs():  # type: ignore
-                self.notebook.select(current_tab)  # type: ignore
-        except Exception:  # pylint: disable=broad-exception-caught
-            pass
+        if current_widget:
+            idx = self.notebook.indexOf(current_widget)
+            if idx >= 0:
+                self.notebook.setCurrentIndex(idx)
 
         self.save_settings()
 
     def apply_default_tab(self) -> None:
         """Select default tab."""
-        if (
-            self.default_tab_var.get() == "server"
-            and self.show_server_var.get()
-        ):
-            self.notebook.select(self.server_tab.frame)  # type: ignore
-        elif (
-            self.default_tab_var.get() == "client"
-            and self.show_client_var.get()
-        ):
-            self.notebook.select(self.client_tab.frame)  # type: ignore
+        if self.default_tab_var == "server" and self.show_server_var:
+            idx = self.notebook.indexOf(self.server_tab)
+            if idx >= 0:
+                self.notebook.setCurrentIndex(idx)
+        elif self.default_tab_var == "client" and self.show_client_var:
+            idx = self.notebook.indexOf(self.client_tab)
+            if idx >= 0:
+                self.notebook.setCurrentIndex(idx)
 
     def save_settings(self) -> None:
         """Save settings to config file."""
+        if (
+            self.server_default_action
+            and self.server_default_action.isChecked()
+        ):
+            self.default_tab_var = "server"
+        elif (
+            self.client_default_action
+            and self.client_default_action.isChecked()
+        ):
+            self.default_tab_var = "client"
+
         config = load_config()
-        config["show_server"] = self.show_server_var.get()
-        config["show_client"] = self.show_client_var.get()
-        config["default_tab"] = self.default_tab_var.get()
+        config["show_server"] = self.show_server_var
+        config["show_client"] = self.show_client_var
+        config["default_tab"] = self.default_tab_var
         save_config(config)
 
 
 def start_app():
     """Start app."""
-    root = Tk()
-    root.wm_title(t("USB/IP Manager"))
-    root.geometry(DEFAULT_GEOMETRY)
-
-    style = Style(root)
-    if "clam" in style.theme_names():
-        style.theme_use("clam")
-
-    bg_color = "#1e1e2e"
-    fg_color = "#cdd6f4"
-    input_bg = "#181825"
-    button_bg = "#313244"
-    button_active_bg = "#45475a"
-    select_bg = "#89b4fa"
-    select_fg = "#1e1e2e"
-    border_color = "#313244"
-
-    root.configure(bg=bg_color)
-
-    class OptionAdder(Protocol):
-        """Protocol for widgets that support adding options."""
-
-        def option_add(
-            self,
-            pattern: str,
-            value: str | int,
-            priority: (
-                int
-                | Literal[
-                    "widgetDefault",
-                    "startupFile",
-                    "userDefault",
-                    "interactive",
-                ]
-                | None
-            ) = ...,
-        ) -> None:
-            """Add an option to the Tkinter option database."""
-
-    def configure_menu_options(adder: OptionAdder) -> None:
-        adder.option_add("*Menu.background", bg_color)
-        adder.option_add("*Menu.foreground", fg_color)
-        adder.option_add("*Menu.activeBackground", button_active_bg)
-        adder.option_add("*Menu.activeForeground", fg_color)
-        adder.option_add("*Menu.activeBorderWidth", 0)
-        adder.option_add("*Menu.borderWidth", 0)
-
-    configure_menu_options(root)
-
-    style.configure(
-        ".",
-        background=bg_color,
-        foreground=fg_color,
-        troughcolor=bg_color,
-        selectbackground=select_bg,
-        selectforeground=select_fg,
-        fieldbackground=input_bg,
-        borderwidth=1,
-        bordercolor=border_color,
-    )
-
-    style.configure(
-        "Treeview",
-        background=input_bg,
-        fieldbackground=input_bg,
-        foreground=fg_color,
-        borderwidth=0,
-        rowheight=28,
-    )
-    style.map(
-        "Treeview",
-        background=[("selected", select_bg)],
-        foreground=[("selected", select_fg)],
-    )
-
-    style.configure(
-        "Treeview.Heading",
-        background=button_bg,
-        foreground=fg_color,
-        borderwidth=1,
-        bordercolor=border_color,
-        relief="flat",
-    )
-    style.map("Treeview.Heading", background=[("active", button_active_bg)])
-
-    style.configure(
-        "TButton",
-        background=button_bg,
-        foreground=fg_color,
-        borderwidth=0,
-        focuscolor=bg_color,
-        relief="flat",
-        padding=5,
-    )
-    style.map(
-        "TButton",
-        background=[("active", button_active_bg), ("pressed", select_bg)],
-        foreground=[("pressed", select_fg)],
-    )
-
-    style.configure(
-        "TCheckbutton",
-        background=bg_color,
-        foreground=fg_color,
-        focuscolor=bg_color,
-    )
-    style.map(
-        "TCheckbutton",
-        background=[("active", bg_color), ("pressed", bg_color)],
-        foreground=[("active", fg_color)],
-        indicatorcolor=[("selected", select_bg), ("pressed", select_bg)],
-    )
-
-    style.configure(
-        "TEntry",
-        fieldbackground=input_bg,
-        foreground=fg_color,
-        bordercolor=border_color,
-        lightcolor=bg_color,
-        darkcolor=bg_color,
-        padding=4,
-        insertcolor=fg_color,
-    )
-
-    style.configure(
-        "TNotebook",
-        background=bg_color,
-        borderwidth=0,
-    )
-    style.configure(
-        "TNotebook.Tab",
-        background=button_bg,
-        foreground=fg_color,
-        padding=[10, 5],
-        borderwidth=0,
-    )
-    style.map(
-        "TNotebook.Tab",
-        background=[("selected", bg_color)],
-        foreground=[("selected", select_bg)],
-    )
-
-    default_font = tkfont.nametofont("TkDefaultFont")
-    default_font.configure(family="Ubuntu", size=11, weight="bold")
-
-    heading_font = tkfont.nametofont("TkHeadingFont")
-    heading_font.configure(family="Ubuntu", size=12, weight="bold")
-
-    text_font = tkfont.nametofont("TkTextFont")
-    text_font.configure(family="Ubuntu", size=11, weight="bold")
-
-    style.configure(".", font="TkDefaultFont")
-    style.configure("Treeview", font=("Ubuntu", 11, "bold"))
-    style.configure("Treeview.Heading", font=("Ubuntu", 12, "bold"))
-
-    loading_label = Label(
-        root,
-        text="Loading...\n--------------\nChargement...",
-        font=("Sans Serif", 24),
-    )
-    loading_label.pack(expand=True)
-    root.update()
+    app = QApplication(sys.argv)
 
     script_path = os.path.join(
         os.path.dirname(
@@ -289,6 +135,13 @@ def start_app():
         if not all(os.path.exists(f"/sys/module/{mod}") for mod in modules):
             subprocess.run(["bash", script_path], check=False)
 
-    loading_label.destroy()
+    root = QMainWindow()
+
+    style_path = os.path.join(os.path.dirname(__file__), "style.qss")
+    if os.path.exists(style_path):
+        with open(style_path, "r", encoding="utf-8") as f:
+            app.setStyleSheet(f.read())
+
     UsbIpGui(root)
-    root.mainloop()
+    root.show()
+    sys.exit(app.exec())

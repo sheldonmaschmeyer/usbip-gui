@@ -1,16 +1,5 @@
 """Server tab implementation for exposing local USB devices."""
 
-from tkinter import BooleanVar, Widget, Event
-from tkinter.ttk import (
-    Frame,
-    Label,
-    Entry,
-    Button,
-    Scrollbar,
-    Treeview,
-    Checkbutton,
-)
-from tkinter import messagebox
 import subprocess
 import os
 import sys
@@ -18,8 +7,21 @@ import time
 import threading
 from typing import List, Tuple
 
+from PyQt6.QtWidgets import (
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QCheckBox,
+    QPushButton,
+    QTreeWidget,
+    QTreeWidgetItem,
+    QMessageBox,
+)
+
 from .. import ssl_tunnel
-from .common import get_translator, USBIPD_PORT, tunnel_state, ToolTip
+from .common import get_translator, USBIPD_PORT, tunnel_state
 
 t = get_translator("server")
 
@@ -39,6 +41,7 @@ def init_usbip_server(
 ):
     """Init usbip server."""
     subprocess.run(["sudo", "pkill", "usbipd"], check=False)
+    subprocess.run(["pkill", "-f", "ssl_tunnel.py server"], check=False)
     if tunnel_state.server_process:
         try:
             tunnel_state.server_process.terminate()
@@ -150,145 +153,114 @@ def unbind_local_usb(bus_id: str):
     return result
 
 
-class ServerTab:
+class ServerTab(QWidget):
     """Servertab."""
 
-    def __init__(self, parent: Widget):
+    def __init__(self, parent: QWidget | None = None):
         """Initialize the class instance."""
-        self.frame = Frame(parent)
+        super().__init__(parent)
 
-        self.frame.columnconfigure(0, weight=1)
-        self.frame.rowconfigure(1, weight=1)
+        layout = QVBoxLayout(self)
 
-        self.local_control_frame = Frame(self.frame)
-        self.local_list_label = Label(
-            self.local_control_frame, text=t("Local USB Devices")
-        )
-        self.local_port_label = Label(
-            self.local_control_frame, text=t("Port ")
-        )
-        self.local_port_input = Entry(self.local_control_frame, width=6)
-        self.local_port_input.insert(0, str(USBIPD_PORT))
-        self.local_secure_var = BooleanVar(value=True)
-        self.local_secure_checkbox = Checkbutton(
-            self.local_control_frame,
-            text=t("Secure"),
-            variable=self.local_secure_var,
-            command=lambda: self.check_secure_warning(self.local_secure_var),
-        )
-        self.local_password_input = Entry(
-            self.local_control_frame, width=15, show="*"
+        # Control Frame 1 (top row)
+        self.local_control_layout1 = QHBoxLayout()
+        self.local_list_label = QLabel(t("Local USB Devices"))
+        self.local_port_label = QLabel(t("Port "))
+        self.local_port_input = QLineEdit()
+        self.local_port_input.setText(str(USBIPD_PORT))
+        self.local_port_input.setFixedWidth(60)
+
+        self.local_bind_ip_label = QLabel(t("Bind IP"))
+        self.local_bind_ip_input = QLineEdit()
+        self.local_bind_ip_input.setText("0.0.0.0")
+        self.local_bind_ip_input.setFixedWidth(120)
+
+        self.local_secure_checkbox = QCheckBox(t("Secure"))
+        self.local_secure_checkbox.setChecked(True)
+        self.local_secure_checkbox.stateChanged.connect(
+            self.check_secure_warning
         )
 
-        self.local_server_restart_button = Button(
-            self.local_control_frame,
-            text=t("Apply Port & Restart"),
-            command=self.restart_server,
-        )
-        ToolTip(self.local_server_restart_button, t("local_restart_tooltip"))
-        self.local_port_input.bind("<Return>", lambda e: self.restart_server())
+        self.local_password_input = QLineEdit()
+        self.local_password_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self.local_password_input.setFixedWidth(150)
 
-        self.local_actions_frame = Frame(self.local_control_frame)
+        self.local_server_restart_button = QPushButton(
+            t("Apply Port & Restart")
+        )
+        self.local_server_restart_button.setToolTip(t("local_restart_tooltip"))
+        self.local_server_restart_button.clicked.connect(self.restart_server)
+        self.local_port_input.returnPressed.connect(self.restart_server)
 
-        self.local_list_refresh_button = Button(
-            self.local_actions_frame,
-            text=t("Refresh"),
-            command=self.refresh_local,
-        )
-        ToolTip(self.local_list_refresh_button, t("local_refresh_tooltip"))
-        self.local_list_bind_button = Button(
-            self.local_actions_frame,
-            text=t("Bind Device"),
-            command=self.bind_local,
-        )
-        ToolTip(self.local_list_bind_button, t("local_bind_tooltip"))
-        self.local_list_unbind_button = Button(
-            self.local_actions_frame,
-            text=t("Unbind Device"),
-            command=self.unbind_local,
-        )
-        ToolTip(self.local_list_unbind_button, t("local_unbind_tooltip"))
-
-        self.local_show_fingerprint_button = Button(
-            self.local_control_frame,
-            text=t("Show Fingerprint"),
-            command=self.show_fingerprint,
-        )
-        self.local_regen_cert_button = Button(
-            self.local_control_frame,
-            text=t("Regen Cert"),
-            command=self.regenerate_cert,
+        self.local_show_fingerprint_button = QPushButton(t("Show Fingerprint"))
+        self.local_show_fingerprint_button.clicked.connect(
+            self.show_fingerprint
         )
 
-        self.local_list_frame = Frame(self.frame)
-        self.local_scroll = Scrollbar(self.local_list_frame, orient="vertical")
-        self.local_listbox = Treeview(
-            self.local_list_frame,
-            columns=LOCAL_DEVICE_COLUMNS,
-            show="headings",
-            yscrollcommand=self.local_scroll.set,
+        self.local_regen_cert_button = QPushButton(t("Regen Cert"))
+        self.local_regen_cert_button.clicked.connect(self.regenerate_cert)
+
+        self.local_control_layout1.addWidget(self.local_list_label)
+        self.local_control_layout1.addWidget(self.local_port_label)
+        self.local_control_layout1.addWidget(self.local_port_input)
+        self.local_control_layout1.addWidget(self.local_bind_ip_label)
+        self.local_control_layout1.addWidget(self.local_bind_ip_input)
+        self.local_control_layout1.addWidget(self.local_secure_checkbox)
+        self.local_control_layout1.addWidget(self.local_password_input)
+        self.local_control_layout1.addWidget(self.local_server_restart_button)
+        self.local_control_layout1.addWidget(
+            self.local_show_fingerprint_button
         )
-        self.local_scroll.config(command=getattr(self.local_listbox, "yview"))
-        self.local_scroll.pack(side="right", fill="y")
-        self.local_listbox.pack(side="left", fill="both", expand=True)
+        self.local_control_layout1.addWidget(self.local_regen_cert_button)
+        self.local_control_layout1.addStretch()
 
-        for col in LOCAL_DEVICE_COLUMNS:
-            self.local_listbox.heading(col, text=col)
+        # Control Frame 2 (actions)
+        self.local_actions_layout = QHBoxLayout()
+        self.local_list_refresh_button = QPushButton(t("Refresh"))
+        self.local_list_refresh_button.setToolTip(t("local_refresh_tooltip"))
+        self.local_list_refresh_button.clicked.connect(self.refresh_local)
 
-        self.local_listbox.bind("<Double-1>", self.on_double_click)
+        self.local_list_bind_button = QPushButton(t("Bind Device"))
+        self.local_list_bind_button.setToolTip(t("local_bind_tooltip"))
+        self.local_list_bind_button.clicked.connect(self.bind_local)
 
-        local_devices = list_local_usb()
-        for device in local_devices:
-            self.local_listbox.insert("", "end", values=device)
+        self.local_list_unbind_button = QPushButton(t("Unbind Device"))
+        self.local_list_unbind_button.setToolTip(t("local_unbind_tooltip"))
+        self.local_list_unbind_button.clicked.connect(self.unbind_local)
 
-        self.local_bind_ip_label = Label(
-            self.local_control_frame, text=t("Bind IP")
-        )
-        self.local_bind_ip_input = Entry(self.local_control_frame, width=12)
-        self.local_bind_ip_input.insert(0, "0.0.0.0")
+        self.local_actions_layout.addWidget(self.local_list_refresh_button)
+        self.local_actions_layout.addWidget(self.local_list_bind_button)
+        self.local_actions_layout.addWidget(self.local_list_unbind_button)
+        self.local_actions_layout.addStretch()
 
-        self.local_list_label.grid(column=0, row=0, padx=10)
-        self.local_port_label.grid(column=1, row=0, padx=(10, 0), sticky="e")
-        self.local_port_input.grid(column=2, row=0, padx=(0, 10), sticky="w")
-        self.local_bind_ip_label.grid(
-            column=3, row=0, padx=(10, 0), sticky="e"
-        )
-        self.local_bind_ip_input.grid(
-            column=4, row=0, padx=(0, 10), sticky="w"
-        )
-        self.local_secure_checkbox.grid(column=5, row=0, padx=5)
-        self.local_password_input.grid(column=6, row=0, padx=5)
-        self.local_server_restart_button.grid(column=7, row=0, padx=10)
-        self.local_show_fingerprint_button.grid(column=8, row=0, padx=10)
-        self.local_regen_cert_button.grid(column=9, row=0, padx=10)
-
-        self.local_actions_frame.grid(
-            column=1, row=1, columnspan=9, sticky="w", pady=(5, 0)
-        )
-        self.local_list_refresh_button.grid(column=0, row=0, padx=(10, 5))
-        self.local_list_bind_button.grid(column=1, row=0, padx=5)
-        self.local_list_unbind_button.grid(column=2, row=0, padx=5)
-
-        self.local_control_frame.grid(
-            column=0, row=0, sticky="ew", pady=(10, 0)
-        )
-        self.local_list_frame.grid(
-            column=0, row=1, sticky="nsew", padx=10, pady=10
+        # List
+        self.local_listbox = QTreeWidget()
+        self.local_listbox.setHeaderLabels(LOCAL_DEVICE_COLUMNS)
+        self.local_listbox.itemDoubleClicked.connect(self.on_double_click)
+        self.local_listbox.setRootIsDecorated(False)
+        self.local_listbox.setSelectionBehavior(
+            QTreeWidget.SelectionBehavior.SelectRows
         )
 
-    def check_secure_warning(self, var: BooleanVar):
+        layout.addLayout(self.local_control_layout1)
+        layout.addLayout(self.local_actions_layout)
+        layout.addWidget(self.local_listbox)
+
+        self.refresh_local()
+
+    def check_secure_warning(self, state: int):
         """Check secure warning."""
-        if not var.get():
-            messagebox.showwarning(t("Warning"), t("insecure_warning_msg"))
+        if state == 0:
+            QMessageBox.warning(self, t("Warning"), t("insecure_warning_msg"))
 
     def show_fingerprint(self):
         """Show fingerprint."""
         try:
             cert_path, _key_path = ssl_tunnel.get_cert_paths()
             fp = ssl_tunnel.get_cert_fingerprint(cert_path)
-            messagebox.showinfo(t("Certificate Fingerprint"), fp)
+            QMessageBox.information(self, t("Certificate Fingerprint"), fp)
         except OSError as e:
-            messagebox.showerror(t("Error"), str(e))
+            QMessageBox.critical(self, t("Error"), str(e))
 
     def regenerate_cert(self):
         """Regenerate cert."""
@@ -299,62 +271,67 @@ class ServerTab:
             if os.path.exists(key_path):
                 os.remove(key_path)
             ssl_tunnel.generate_self_signed_cert(cert_path, key_path)
-            messagebox.showinfo(t("Success"), t("cert_regen"))
+            QMessageBox.information(self, t("Success"), t("cert_regen"))
         except OSError as e:
-            messagebox.showerror(t("Error"), str(e))
+            QMessageBox.critical(self, t("Error"), str(e))
 
     def refresh_local(self):
         """Refresh local."""
         local_devices = list_local_usb()
-        self.local_listbox.delete(*self.local_listbox.get_children())
+        self.local_listbox.clear()
         for device in local_devices:
-            self.local_listbox.insert("", "end", values=device)
+            item = QTreeWidgetItem(
+                self.local_listbox, [str(d) for d in device]
+            )
+            self.local_listbox.addTopLevelItem(item)
+
+        for i in range(len(LOCAL_DEVICE_COLUMNS)):
+            self.local_listbox.resizeColumnToContents(i)
 
     def restart_server(self):
         """Restart server."""
         try:
-            port = int(self.local_port_input.get())
+            port = int(self.local_port_input.text())
         except ValueError:
-            messagebox.showerror(t("Error"), t("Invalid port number"))
+            QMessageBox.critical(self, t("Error"), t("Invalid port number"))
             return
-        secure = self.local_secure_var.get()
-        password = self.local_password_input.get()
+        secure = self.local_secure_checkbox.isChecked()
+        password = self.local_password_input.text()
         if secure and not password:
-            messagebox.showerror(
-                t("Error"), t("Password required for secure connection")
+            QMessageBox.critical(
+                self, t("Error"), t("Password required for secure connection")
             )
             return
-        bind_host = self.local_bind_ip_input.get().strip() or "0.0.0.0"
+        bind_host = self.local_bind_ip_input.text().strip() or "0.0.0.0"
         init_usbip_server(port, secure, password, bind_host)
 
     def bind_local(self):
         """Bind local."""
-        selection = self.local_listbox.selection()
+        selection = self.local_listbox.selectedItems()
         if not selection:
-            messagebox.showerror(t("Error"), t("no selection to bind"))
+            QMessageBox.critical(self, t("Error"), t("no selection to bind"))
             return
-        bus_id = self.local_listbox.item(selection[0])["values"][0]
-        bind_local_usb(str(bus_id))
+        bus_id = selection[0].text(0)
+        bind_local_usb(bus_id)
         time.sleep(0.5)
         self.refresh_local()
 
     def unbind_local(self):
         """Unbind local."""
-        selection = self.local_listbox.selection()
+        selection = self.local_listbox.selectedItems()
         if not selection:
-            messagebox.showerror(t("Error"), t("no selection to unbind"))
+            QMessageBox.critical(self, t("Error"), t("no selection to unbind"))
             return
-        bus_id = self.local_listbox.item(selection[0])["values"][0]
-        unbind_local_usb(str(bus_id))
+        bus_id = selection[0].text(0)
+        unbind_local_usb(bus_id)
         time.sleep(0.5)
         self.refresh_local()
 
-    def on_double_click(self, _event: Event) -> None:
+    def on_double_click(self, _item: QTreeWidgetItem, _column: int) -> None:
         """Toggle bind/unbind on double click."""
-        selection = self.local_listbox.selection()
-        if not selection:
+        if not _item:
             return
-        state = self.local_listbox.item(selection[0])["values"][1]
+        state = _item.text(1)
         if state == t("Bound"):
             self.unbind_local()
         else:

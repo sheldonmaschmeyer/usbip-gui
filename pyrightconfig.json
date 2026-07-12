@@ -1,4 +1,11 @@
 {
   "typeCheckingMode": "strict",
-  "include": ["usbip_gui"]
+  "include": ["usbip_gui"],
+  "venvPath": ".pixi/envs",
+  "venv": "default",
+  "reportUnknownMemberType": false,
+  "reportUnknownArgumentType": false,
+  "reportUnknownParameterType": false,
+  "reportOptionalMemberAccess": false,
+  "reportCallIssue": false
 }

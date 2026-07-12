@@ -1,6 +1,7 @@
 """Tests for the server tab."""
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from usbip_gui.gui.server import (
     ServerTab,
     parse_local_list,
@@ -11,25 +12,10 @@ from usbip_gui.gui.server import (
 )
 
 
-@patch("usbip_gui.gui.server.BooleanVar")
-@patch("usbip_gui.gui.server.Frame")
-@patch("usbip_gui.gui.server.Treeview")
-@patch("usbip_gui.gui.server.Button")
 @patch("usbip_gui.gui.server.list_local_usb", return_value=[])
-# pylint: disable=too-many-arguments,too-many-positional-arguments
-def test_server_tab_init(
-    _mock_local: MagicMock,
-    _mock_button: MagicMock,
-    _mock_tree: MagicMock,
-    mock_frame: MagicMock,
-    _mock_bool: MagicMock,
-):
+def test_server_tab_init(_mock_local: MagicMock):
     """Test ServerTab initialization."""
-    mock_parent = MagicMock()
-    tab = ServerTab(mock_parent)
-
-    mock_frame.assert_called()
-    assert tab.frame is not None
+    tab = ServerTab(None)
     assert tab.local_listbox is not None
 
 
@@ -49,7 +35,7 @@ def test_init_usbip_server(mock_tunnel_state: MagicMock, mock_run: MagicMock):
     """Test init_usbip_server function."""
     mock_tunnel_state.server_process = MagicMock()
     init_usbip_server(port=3240, secure=False)
-    assert mock_run.call_count == 2
+    assert mock_run.call_count == 3
     mock_run.assert_any_call(["sudo", "pkill", "usbipd"], check=False)
     mock_run.assert_called_with(
         ["sudo", "usbipd", "-D", "--tcp-port", "3240"], check=False
@@ -65,7 +51,7 @@ def test_init_usbip_server_secure(
     """Test init_usbip_server secure function."""
     mock_tunnel_state.server_process = None
     init_usbip_server(port=3240, secure=True, password="test")
-    assert mock_run.call_count == 2
+    assert mock_run.call_count == 3
     mock_thread.assert_called_once()
     mock_thread.return_value.start.assert_called_once()
 
@@ -98,17 +84,15 @@ def test_bind_unbind_local_usb(mock_run: MagicMock):
     )
 
 
-@patch("usbip_gui.gui.server.messagebox.showwarning")
+@patch("usbip_gui.gui.server.QMessageBox.warning")
 def test_check_secure_warning(mock_warning: MagicMock):
     """Test secure warning popup."""
-    var = MagicMock()
-    var.get.return_value = False
     tab = MagicMock()
-    ServerTab.check_secure_warning(tab, var)
+    ServerTab.check_secure_warning(tab, 0)
     mock_warning.assert_called_once()
 
 
-@patch("usbip_gui.gui.server.messagebox.showinfo")
+@patch("usbip_gui.gui.server.QMessageBox.information")
 @patch("usbip_gui.gui.server.ssl_tunnel.get_cert_fingerprint")
 @patch("usbip_gui.gui.server.ssl_tunnel.get_cert_paths")
 def test_show_fingerprint(
@@ -126,15 +110,15 @@ def test_show_fingerprint(
 def test_restart_server(mock_init: MagicMock):
     """Test restart server."""
     tab = MagicMock()
-    tab.local_port_input.get.return_value = "3240"
-    tab.local_secure_var.get.return_value = True
-    tab.local_password_input.get.return_value = "pass"
-    tab.local_bind_ip_input.get.return_value = "1.2.3.4"
+    tab.local_port_input.text.return_value = "3240"
+    tab.local_secure_checkbox.isChecked.return_value = True
+    tab.local_password_input.text.return_value = "pass"
+    tab.local_bind_ip_input.text.return_value = "1.2.3.4"
     ServerTab.restart_server(tab)
     mock_init.assert_called_once_with(3240, True, "pass", "1.2.3.4")
 
 
-@patch("usbip_gui.gui.server.messagebox.showinfo")
+@patch("usbip_gui.gui.server.QMessageBox.information")
 @patch("usbip_gui.gui.server.ssl_tunnel.generate_self_signed_cert")
 @patch("usbip_gui.gui.server.os.remove")
 @patch("usbip_gui.gui.server.os.path.exists", return_value=True)
@@ -156,14 +140,17 @@ def test_regenerate_cert(
     mock_info.assert_called_once()
 
 
+@patch("usbip_gui.gui.server.QTreeWidgetItem")
 @patch("usbip_gui.gui.server.list_local_usb")
-def test_refresh_local(mock_list: MagicMock):
+def test_refresh_local(mock_list: MagicMock, mock_item: MagicMock):
     """Test refresh local devices list."""
     mock_list.return_value = [("1-1", "Bound", "Man", "Desc")]
     tab = MagicMock()
     ServerTab.refresh_local(tab)
-    tab.local_listbox.delete.assert_called_once()
-    tab.local_listbox.insert.assert_called_once()
+    tab.local_listbox.clear.assert_called_once()
+    mock_item.assert_called_once_with(
+        tab.local_listbox, ["1-1", "Bound", "Man", "Desc"]
+    )
 
 
 @patch("usbip_gui.gui.server.time.sleep")
@@ -171,8 +158,9 @@ def test_refresh_local(mock_list: MagicMock):
 def test_bind_local_ui(mock_bind: MagicMock, _mock_sleep: MagicMock):
     """Test bind button handler."""
     tab = MagicMock()
-    tab.local_listbox.selection.return_value = ["item1"]
-    tab.local_listbox.item.return_value = {"values": ["1-1"]}
+    item = MagicMock()
+    item.text.return_value = "1-1"
+    tab.local_listbox.selectedItems.return_value = [item]
     ServerTab.bind_local(tab)
     mock_bind.assert_called_once_with("1-1")
     tab.refresh_local.assert_called_once()
@@ -183,8 +171,9 @@ def test_bind_local_ui(mock_bind: MagicMock, _mock_sleep: MagicMock):
 def test_unbind_local_ui(mock_unbind: MagicMock, _mock_sleep: MagicMock):
     """Test unbind button handler."""
     tab = MagicMock()
-    tab.local_listbox.selection.return_value = ["item1"]
-    tab.local_listbox.item.return_value = {"values": ["1-1"]}
+    item = MagicMock()
+    item.text.return_value = "1-1"
+    tab.local_listbox.selectedItems.return_value = [item]
     ServerTab.unbind_local(tab)
     mock_unbind.assert_called_once_with("1-1")
     tab.refresh_local.assert_called_once()
@@ -193,16 +182,18 @@ def test_unbind_local_ui(mock_unbind: MagicMock, _mock_sleep: MagicMock):
 def test_on_double_click():
     """Test double click toggle on treeview."""
     server_tab = MagicMock()
-    server_tab.local_listbox.selection.return_value = ["item1"]
-    # Test bound -> unbind
-    server_tab.local_listbox.item.return_value = {"values": ["1-1", "Bound"]}
-    ServerTab.on_double_click(server_tab, MagicMock())
+    item = MagicMock()
+    item.text.return_value = "Bound"
+    server_tab.local_listbox.selectedItems.return_value = [item]
+    ServerTab.on_double_click(server_tab, item, 0)
     server_tab.unbind_local.assert_called_once()
 
     # Test unbound -> bind
     server_tab.unbind_local.reset_mock()
-    server_tab.local_listbox.item.return_value = {"values": ["1-1", "Unbound"]}
-    ServerTab.on_double_click(server_tab, MagicMock())
+    item = MagicMock()
+    item.text.return_value = "Unbound"
+    server_tab.local_listbox.selectedItems.return_value = [item]
+    ServerTab.on_double_click(server_tab, item, 0)
     server_tab.bind_local.assert_called_once()
 
 
@@ -255,72 +246,70 @@ def test_parse_local_list_bound(
     assert res[0][1] == "Bound"
 
 
-@patch("usbip_gui.gui.server.BooleanVar")
 @patch("usbip_gui.gui.server.list_local_usb")
-def test_server_ui_errors(mock_local: MagicMock, _mock_bool: MagicMock):
+def test_server_ui_errors(mock_local: MagicMock):
     """Test server ui errors."""
 
     mock_local.return_value = [("a", "b", "c", "d")]
-    parent = MagicMock()
-    server_tab = ServerTab(parent)
+    server_tab = ServerTab(None)
 
-    with patch.object(server_tab.local_listbox, "selection", return_value=()):
+    with patch.object(
+        server_tab.local_listbox, "selectedItems", return_value=()
+    ):
         with (
-            patch("usbip_gui.gui.server.messagebox.showerror") as mock_err,
+            patch("usbip_gui.gui.server.QMessageBox.critical") as mock_err,
             patch.object(
-                server_tab.local_port_input, "get", return_value="abc"
+                server_tab.local_port_input, "text", return_value="abc"
             ),
         ):
             server_tab.restart_server()
             mock_err.assert_called_once()
 
         with (
-            patch("usbip_gui.gui.server.messagebox.showerror") as mock_err,
+            patch("usbip_gui.gui.server.QMessageBox.critical") as mock_err,
             patch.object(
-                server_tab.local_port_input, "get", return_value="1234"
+                server_tab.local_port_input, "text", return_value="1234"
             ),
             patch.object(
-                server_tab.local_secure_var, "get", return_value=True
+                server_tab.local_secure_checkbox,
+                "isChecked",
+                return_value=True,
             ),
             patch.object(
-                server_tab.local_password_input, "get", return_value=""
+                server_tab.local_password_input, "text", return_value=""
             ),
         ):
             server_tab.restart_server()
             mock_err.assert_called_once()
 
-        with patch("usbip_gui.gui.server.messagebox.showerror") as mock_err:
+        with patch("usbip_gui.gui.server.QMessageBox.critical") as mock_err:
             server_tab.bind_local()
             mock_err.assert_called_once()
 
-        with patch("usbip_gui.gui.server.messagebox.showerror") as mock_err:
+        with patch("usbip_gui.gui.server.QMessageBox.critical") as mock_err:
             server_tab.unbind_local()
             mock_err.assert_called_once()
 
-        with patch("usbip_gui.gui.server.messagebox.showerror") as mock_err:
-            server_tab.on_double_click(MagicMock())
+        with patch("usbip_gui.gui.server.QMessageBox.critical") as mock_err:
+            server_tab.on_double_click(None, 0)  # type: ignore
             mock_err.assert_not_called()
 
 
-@patch("usbip_gui.gui.server.BooleanVar")
 @patch("usbip_gui.gui.server.ssl_tunnel.get_cert_paths", side_effect=OSError)
-def test_show_fingerprint_oserror(_mock_get: MagicMock, _mock_bool: MagicMock):
+def test_show_fingerprint_oserror(_mock_get: MagicMock):
     """Test show fingerprint handles oserror."""
 
-    parent = MagicMock()
-    server_tab = ServerTab(parent)
-    with patch("usbip_gui.gui.server.messagebox.showerror") as mock_err:
+    server_tab = ServerTab(None)
+    with patch("usbip_gui.gui.server.QMessageBox.critical") as mock_err:
         server_tab.show_fingerprint()
         mock_err.assert_called_once()
 
 
-@patch("usbip_gui.gui.server.BooleanVar")
 @patch("usbip_gui.gui.server.ssl_tunnel.get_cert_paths", side_effect=OSError)
-def test_regenerate_cert_oserror(_mock_get: MagicMock, _mock_bool: MagicMock):
+def test_regenerate_cert_oserror(_mock_get: MagicMock):
     """Test regenerate cert handles oserror."""
 
-    parent = MagicMock()
-    server_tab = ServerTab(parent)
-    with patch("usbip_gui.gui.server.messagebox.showerror") as mock_err:
+    server_tab = ServerTab(None)
+    with patch("usbip_gui.gui.server.QMessageBox.critical") as mock_err:
         server_tab.regenerate_cert()
         mock_err.assert_called_once()

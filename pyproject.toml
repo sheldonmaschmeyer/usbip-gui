@@ -1,10 +1,11 @@
 [tool.black]
 line-length = 79
 
-[tool.pylint.MASTER]
+[tool.pylint.main]
 ignore = [".git", ".pixi"]
+extension-pkg-allow-list = ["PyQt6"]
 
-[tool.pylint.DESIGN]
+[tool.pylint.design]
 max-locals = 35
 max-statements = 70
 max-branches = 20

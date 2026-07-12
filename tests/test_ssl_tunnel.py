@@ -1,9 +1,10 @@
 """Tests for the ssl_tunnel module."""
 
+import os
 import runpy
 import sys
-import os
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from usbip_gui.ssl_tunnel import (
     get_cert_fingerprint,
     generate_self_signed_cert,
