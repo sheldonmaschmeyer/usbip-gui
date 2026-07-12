@@ -249,7 +249,7 @@ def test_check_secure_warning(mock_warning: MagicMock):
     mock_warning.assert_called_once()
 
 
-@patch("usbip_gui.gui.client.QTreeWidgetItem")
+@patch("usbip_gui.gui.client.SortableTreeWidgetItem")
 @patch("usbip_gui.gui.client.list_remote_usb")
 def test_refresh_remote(mock_list: MagicMock, mock_item: MagicMock):
     """Test refresh remote."""
@@ -263,7 +263,7 @@ def test_refresh_remote(mock_list: MagicMock, mock_item: MagicMock):
     )
 
 
-@patch("usbip_gui.gui.client.QTreeWidgetItem")
+@patch("usbip_gui.gui.client.SortableTreeWidgetItem")
 @patch("usbip_gui.gui.client.list_attached_usb")
 def test_refresh_attached(mock_list: MagicMock, mock_item: MagicMock):
     """Test refresh attached."""
