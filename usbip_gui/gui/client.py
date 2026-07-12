@@ -27,6 +27,7 @@ from PyQt6.QtWidgets import (
 )
 from usbip_gui.gui.common import SortableTreeWidgetItem
 
+from usbip_gui.typings import connect_signal, set_header_labels
 from .common import (
     get_translator,
     USBIPD_PORT,
@@ -311,8 +312,8 @@ class ClientTab(QWidget):
 
         self.remote_secure_checkbox = QCheckBox(t("Secure"))
         self.remote_secure_checkbox.setChecked(True)
-        self.remote_secure_checkbox.stateChanged.connect(
-            self.check_secure_warning
+        connect_signal(
+            self.remote_secure_checkbox.stateChanged, self.check_secure_warning
         )
 
         self.remote_password_input = QLineEdit()
@@ -321,11 +322,15 @@ class ClientTab(QWidget):
 
         self.remote_list_refresh_button = QPushButton(t("Refresh"))
         self.remote_list_refresh_button.setToolTip(t("remote_refresh_tooltip"))
-        self.remote_list_refresh_button.clicked.connect(self.refresh_remote)
+        connect_signal(
+            self.remote_list_refresh_button.clicked, self.refresh_remote
+        )
 
         self.remote_list_attach_button = QPushButton(t("Attach Device"))
         self.remote_list_attach_button.setToolTip(t("remote_attach_tooltip"))
-        self.remote_list_attach_button.clicked.connect(self.attach_remote)
+        connect_signal(
+            self.remote_list_attach_button.clicked, self.attach_remote
+        )
 
         self.remote_control_layout.addWidget(self.remote_list_label)
         self.remote_control_layout.addWidget(self.remote_ip_input)
@@ -338,10 +343,10 @@ class ClientTab(QWidget):
 
         # Remote List
         self.remote_listbox = QTreeWidget()
-        self.remote_listbox.setHeaderLabels(DEVICE_COLUMNS)
+        set_header_labels(self.remote_listbox, DEVICE_COLUMNS)
         self.remote_listbox.setSortingEnabled(True)
-        self.remote_listbox.itemDoubleClicked.connect(
-            self.on_double_click_remote
+        connect_signal(
+            self.remote_listbox.itemDoubleClicked, self.on_double_click_remote
         )
         self.remote_listbox.setRootIsDecorated(False)
         self.remote_listbox.setSelectionBehavior(
@@ -356,13 +361,13 @@ class ClientTab(QWidget):
         self.attached_list_refresh_button.setToolTip(
             t("attached_refresh_tooltip")
         )
-        self.attached_list_refresh_button.clicked.connect(
-            self.refresh_attached
+        connect_signal(
+            self.attached_list_refresh_button.clicked, self.refresh_attached
         )
 
         self.detach_button = QPushButton(t("Detach Device"))
         self.detach_button.setToolTip(t("attached_detach_tooltip"))
-        self.detach_button.clicked.connect(self.detach_remote)
+        connect_signal(self.detach_button.clicked, self.detach_remote)
 
         self.attached_control_layout.addWidget(self.attached_list_label)
         self.attached_control_layout.addWidget(
@@ -373,10 +378,11 @@ class ClientTab(QWidget):
 
         # Attached List
         self.attached_listbox = QTreeWidget()
-        self.attached_listbox.setHeaderLabels(ATTACHED_COLUMNS)
+        set_header_labels(self.attached_listbox, ATTACHED_COLUMNS)
         self.attached_listbox.setSortingEnabled(True)
-        self.attached_listbox.itemDoubleClicked.connect(
-            self.on_double_click_attached
+        connect_signal(
+            self.attached_listbox.itemDoubleClicked,
+            self.on_double_click_attached,
         )
         self.attached_listbox.setRootIsDecorated(False)
         self.attached_listbox.setSelectionBehavior(

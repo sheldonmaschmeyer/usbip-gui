@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
 )
 
+from usbip_gui.typings import connect_signal, set_header_labels
 from .. import ssl_tunnel
 from .common import (
     get_translator,
@@ -181,8 +182,8 @@ class ServerTab(QWidget):
 
         self.local_secure_checkbox = QCheckBox(t("Secure"))
         self.local_secure_checkbox.setChecked(True)
-        self.local_secure_checkbox.stateChanged.connect(
-            self.check_secure_warning
+        connect_signal(
+            self.local_secure_checkbox.stateChanged, self.check_secure_warning
         )
 
         self.local_password_input = QLineEdit()
@@ -193,16 +194,22 @@ class ServerTab(QWidget):
             t("Apply Port & Restart")
         )
         self.local_server_restart_button.setToolTip(t("local_restart_tooltip"))
-        self.local_server_restart_button.clicked.connect(self.restart_server)
-        self.local_port_input.returnPressed.connect(self.restart_server)
+        connect_signal(
+            self.local_server_restart_button.clicked, self.restart_server
+        )
+        connect_signal(
+            self.local_port_input.returnPressed, self.restart_server
+        )
 
         self.local_show_fingerprint_button = QPushButton(t("Show Fingerprint"))
-        self.local_show_fingerprint_button.clicked.connect(
-            self.show_fingerprint
+        connect_signal(
+            self.local_show_fingerprint_button.clicked, self.show_fingerprint
         )
 
         self.local_regen_cert_button = QPushButton(t("Regen Cert"))
-        self.local_regen_cert_button.clicked.connect(self.regenerate_cert)
+        connect_signal(
+            self.local_regen_cert_button.clicked, self.regenerate_cert
+        )
 
         self.local_control_layout1.addWidget(self.local_list_label)
         self.local_control_layout1.addWidget(self.local_port_label)
@@ -222,15 +229,19 @@ class ServerTab(QWidget):
         self.local_actions_layout = QHBoxLayout()
         self.local_list_refresh_button = QPushButton(t("Refresh"))
         self.local_list_refresh_button.setToolTip(t("local_refresh_tooltip"))
-        self.local_list_refresh_button.clicked.connect(self.refresh_local)
+        connect_signal(
+            self.local_list_refresh_button.clicked, self.refresh_local
+        )
 
         self.local_list_bind_button = QPushButton(t("Bind Device"))
         self.local_list_bind_button.setToolTip(t("local_bind_tooltip"))
-        self.local_list_bind_button.clicked.connect(self.bind_local)
+        connect_signal(self.local_list_bind_button.clicked, self.bind_local)
 
         self.local_list_unbind_button = QPushButton(t("Unbind Device"))
         self.local_list_unbind_button.setToolTip(t("local_unbind_tooltip"))
-        self.local_list_unbind_button.clicked.connect(self.unbind_local)
+        connect_signal(
+            self.local_list_unbind_button.clicked, self.unbind_local
+        )
 
         self.local_actions_layout.addWidget(self.local_list_refresh_button)
         self.local_actions_layout.addWidget(self.local_list_bind_button)
@@ -239,9 +250,11 @@ class ServerTab(QWidget):
 
         # List
         self.local_listbox = QTreeWidget()
-        self.local_listbox.setHeaderLabels(LOCAL_DEVICE_COLUMNS)
+        set_header_labels(self.local_listbox, LOCAL_DEVICE_COLUMNS)
         self.local_listbox.setSortingEnabled(True)
-        self.local_listbox.itemDoubleClicked.connect(self.on_double_click)
+        connect_signal(
+            self.local_listbox.itemDoubleClicked, self.on_double_click
+        )
         self.local_listbox.setRootIsDecorated(False)
         self.local_listbox.setSelectionBehavior(
             QTreeWidget.SelectionBehavior.SelectRows
