@@ -16,12 +16,16 @@ from PyQt6.QtWidgets import (
     QCheckBox,
     QPushButton,
     QTreeWidget,
-    QTreeWidgetItem,
     QMessageBox,
 )
 
 from .. import ssl_tunnel
-from .common import get_translator, USBIPD_PORT, tunnel_state
+from .common import (
+    get_translator,
+    USBIPD_PORT,
+    tunnel_state,
+    SortableTreeWidgetItem,
+)
 
 t = get_translator("server")
 
@@ -236,6 +240,7 @@ class ServerTab(QWidget):
         # List
         self.local_listbox = QTreeWidget()
         self.local_listbox.setHeaderLabels(LOCAL_DEVICE_COLUMNS)
+        self.local_listbox.setSortingEnabled(True)
         self.local_listbox.itemDoubleClicked.connect(self.on_double_click)
         self.local_listbox.setRootIsDecorated(False)
         self.local_listbox.setSelectionBehavior(
@@ -280,7 +285,7 @@ class ServerTab(QWidget):
         local_devices = list_local_usb()
         self.local_listbox.clear()
         for device in local_devices:
-            item = QTreeWidgetItem(
+            item = SortableTreeWidgetItem(
                 self.local_listbox, [str(d) for d in device]
             )
             self.local_listbox.addTopLevelItem(item)
@@ -327,8 +332,10 @@ class ServerTab(QWidget):
         time.sleep(0.5)
         self.refresh_local()
 
-    def on_double_click(self, _item: QTreeWidgetItem, _column: int) -> None:
-        """Toggle bind/unbind on double click."""
+    def on_double_click(
+        self, _item: SortableTreeWidgetItem, _column: int
+    ) -> None:
+        """Handle double clicks on the device list."""
         if not _item:
             return
         state = _item.text(1)

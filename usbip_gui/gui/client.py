@@ -23,9 +23,9 @@ from PyQt6.QtWidgets import (
     QCheckBox,
     QPushButton,
     QTreeWidget,
-    QTreeWidgetItem,
     QMessageBox,
 )
+from usbip_gui.gui.common import SortableTreeWidgetItem
 
 from .common import (
     get_translator,
@@ -339,6 +339,7 @@ class ClientTab(QWidget):
         # Remote List
         self.remote_listbox = QTreeWidget()
         self.remote_listbox.setHeaderLabels(DEVICE_COLUMNS)
+        self.remote_listbox.setSortingEnabled(True)
         self.remote_listbox.itemDoubleClicked.connect(
             self.on_double_click_remote
         )
@@ -373,6 +374,7 @@ class ClientTab(QWidget):
         # Attached List
         self.attached_listbox = QTreeWidget()
         self.attached_listbox.setHeaderLabels(ATTACHED_COLUMNS)
+        self.attached_listbox.setSortingEnabled(True)
         self.attached_listbox.itemDoubleClicked.connect(
             self.on_double_click_attached
         )
@@ -405,7 +407,7 @@ class ClientTab(QWidget):
         remote_devices = list_remote_usb(server_ip, port, secure, password)
         self.remote_listbox.clear()
         for device in remote_devices:
-            item = QTreeWidgetItem(
+            item = SortableTreeWidgetItem(
                 self.remote_listbox, [str(d) for d in device]
             )
             self.remote_listbox.addTopLevelItem(item)
@@ -418,7 +420,7 @@ class ClientTab(QWidget):
         attached_devices = list_attached_usb()
         self.attached_listbox.clear()
         for attached_device in attached_devices:
-            item = QTreeWidgetItem(
+            item = SortableTreeWidgetItem(
                 self.attached_listbox, [str(d) for d in attached_device]
             )
             self.attached_listbox.addTopLevelItem(item)
@@ -463,14 +465,14 @@ class ClientTab(QWidget):
         self.refresh_attached()
 
     def on_double_click_remote(
-        self, _item: QTreeWidgetItem, _column: int
+        self, _item: SortableTreeWidgetItem, _column: int
     ) -> None:
         """Attach remote usb on double click."""
         if _item:
             self.attach_remote()
 
     def on_double_click_attached(
-        self, _item: QTreeWidgetItem, _column: int
+        self, _item: SortableTreeWidgetItem, _column: int
     ) -> None:
         """Detach remote usb on double click."""
         if _item:

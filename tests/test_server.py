@@ -140,7 +140,7 @@ def test_regenerate_cert(
     mock_info.assert_called_once()
 
 
-@patch("usbip_gui.gui.server.QTreeWidgetItem")
+@patch("usbip_gui.gui.server.SortableTreeWidgetItem")
 @patch("usbip_gui.gui.server.list_local_usb")
 def test_refresh_local(mock_list: MagicMock, mock_item: MagicMock):
     """Test refresh local devices list."""

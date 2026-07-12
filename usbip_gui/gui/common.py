@@ -8,6 +8,8 @@ from pathlib import Path
 import json
 import os
 import sys
+import re
+from PyQt6.QtWidgets import QTreeWidgetItem
 
 VERSION = "1.2.0"
 
@@ -118,3 +120,27 @@ def cleanup_tunnels() -> None:
 
 
 atexit.register(cleanup_tunnels)
+
+
+class SortableTreeWidgetItem(QTreeWidgetItem):
+    """Tree widget item that supports natural sorting."""
+
+    def __lt__(self, other: "QTreeWidgetItem") -> bool:
+        tree = self.treeWidget()
+        if not tree:
+            return super().__lt__(other)
+
+        column = tree.sortColumn()
+        text1 = self.text(column)
+        text2 = other.text(column)
+
+        def natural_sort_key(s: str) -> List[Union[int, str]]:
+            return [
+                int(text) if text.isdigit() else text.lower()
+                for text in re.split(r"(\d+)", s)
+            ]
+
+        try:
+            return natural_sort_key(text1) < natural_sort_key(text2)
+        except TypeError:
+            return super().__lt__(other)
