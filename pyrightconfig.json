@@ -3,5 +3,4 @@
   "include": ["usbip_gui"],
   "venvPath": ".pixi/envs",
   "venv": "default",
-  "reportUnknownMemberType": false,
 }
