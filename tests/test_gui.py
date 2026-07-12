@@ -99,6 +99,13 @@ def test_gui_update_tabs_and_defaults(
     gui.show_server_var = True
     gui.show_client_var = True
     gui.default_tab_var = "server"
+
+    # Cover the visible actions checking
+    gui.server_visible_action = MagicMock()
+    gui.server_visible_action.isChecked.return_value = True
+    gui.client_visible_action = MagicMock()
+    gui.client_visible_action.isChecked.return_value = True
+
     mock_notebook.widget.return_value = None
 
     gui.update_tabs()
@@ -117,3 +124,28 @@ def test_gui_update_tabs_and_defaults(
     mock_notebook.indexOf.return_value = 1
     gui.apply_default_tab()
     mock_notebook.setCurrentIndex.assert_called_with(1)
+
+
+@patch("usbip_gui.gui.gui.QTabWidget")
+@patch("usbip_gui.gui.gui.ServerTab")
+@patch("usbip_gui.gui.gui.ClientTab")
+@patch("usbip_gui.gui.gui.create_main_menu")
+def test_save_settings_logic(
+    _menu: MagicMock, _client: MagicMock, _server: MagicMock, _tab: MagicMock
+):
+    """Test save settings logic."""
+    _tab.return_value.currentIndex.return_value = 0
+    _tab.return_value.indexOf.return_value = 0
+    mock_root = MagicMock()
+    gui = UsbIpGui(mock_root)
+
+    gui.server_default_action = MagicMock()
+    gui.server_default_action.isChecked.return_value = True
+    gui.save_settings()
+    assert gui.default_tab_var == "server"
+
+    gui.server_default_action.isChecked.return_value = False
+    gui.client_default_action = MagicMock()
+    gui.client_default_action.isChecked.return_value = True
+    gui.save_settings()
+    assert gui.default_tab_var == "client"

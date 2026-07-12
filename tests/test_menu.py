@@ -17,6 +17,20 @@ def test_create_main_menu(_mock_action: MagicMock, _mock_group: MagicMock):
     mock_app.root.menuBar.assert_called_once()
 
 
+@patch("usbip_gui.gui.menu.menu.QActionGroup")
+@patch("usbip_gui.gui.menu.menu.QAction")
+def test_create_main_menu_defaults(
+    _mock_action: MagicMock, _mock_group: MagicMock
+):
+    """Test creation of the main application menu with defaults."""
+    mock_app = MagicMock()
+    mock_app.default_tab_var = "server"
+    create_main_menu(mock_app)
+
+    mock_app.default_tab_var = "client"
+    create_main_menu(mock_app)
+
+
 @patch("usbip_gui.gui.menu.about.QMessageBox.about")
 def test_show_about(mock_about: MagicMock):
     """Test the about dialog popup."""
