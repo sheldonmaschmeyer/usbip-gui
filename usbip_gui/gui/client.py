@@ -25,7 +25,7 @@ from PyQt6.QtWidgets import (
     QTreeWidget,
     QMessageBox,
 )
-from usbip_gui.gui.common import SortableTreeWidgetItem
+from usbip_gui.gui.common import SortableTreeWidgetItem, set_min_column_widths
 
 from usbip_gui.typings import connect_signal, set_header_labels
 from .common import (
@@ -352,6 +352,7 @@ class ClientTab(QWidget):
         self.remote_listbox.setSelectionBehavior(
             QTreeWidget.SelectionBehavior.SelectRows
         )
+        set_min_column_widths(self.remote_listbox, [100, 160, 200])
 
         # Attached Control Frame
         self.attached_control_layout = QHBoxLayout()
@@ -388,6 +389,7 @@ class ClientTab(QWidget):
         self.attached_listbox.setSelectionBehavior(
             QTreeWidget.SelectionBehavior.SelectRows
         )
+        set_min_column_widths(self.attached_listbox, [120, 60, 100, 160, 200])
 
         layout.addLayout(self.remote_control_layout)
         layout.addWidget(self.remote_listbox)

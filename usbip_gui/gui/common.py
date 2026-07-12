@@ -9,7 +9,8 @@ import json
 import os
 import sys
 import re
-from PyQt6.QtWidgets import QTreeWidgetItem
+from PyQt6.QtWidgets import QTreeWidgetItem, QTreeWidget
+from usbip_gui.typings import connect_signal
 
 VERSION = "1.2.0"
 
@@ -20,6 +21,25 @@ JsonValue = Union[
     str, int, float, bool, None, Dict[str, "JsonValue"], List["JsonValue"]
 ]
 JsonDict = Dict[str, JsonValue]
+
+
+def set_min_column_widths(tree: QTreeWidget, min_widths: List[int]) -> None:
+    """Enforce a minimum pixel width per column."""
+    header = tree.header()
+    if not header:
+        return
+
+    def enforce_min(index: int, _old: int, new: int) -> None:
+        if index < len(min_widths) and new < min_widths[index]:
+            if header := tree.header():
+                header.resizeSection(index, min_widths[index])
+
+    connect_signal(header.sectionResized, enforce_min)
+
+    # Apply immediately
+    for i, w in enumerate(min_widths):
+        if tree.columnWidth(i) < w:
+            tree.setColumnWidth(i, w)
 
 
 def get_config_dir() -> Path:

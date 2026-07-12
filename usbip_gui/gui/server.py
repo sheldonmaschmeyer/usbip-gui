@@ -26,6 +26,7 @@ from .common import (
     USBIPD_PORT,
     tunnel_state,
     SortableTreeWidgetItem,
+    set_min_column_widths,
 )
 
 t = get_translator("server")
@@ -190,9 +191,7 @@ class ServerTab(QWidget):
         self.local_password_input.setEchoMode(QLineEdit.EchoMode.Password)
         self.local_password_input.setFixedWidth(150)
 
-        self.local_server_restart_button = QPushButton(
-            t("apply_port_restart")
-        )
+        self.local_server_restart_button = QPushButton(t("apply_port_restart"))
         self.local_server_restart_button.setToolTip(t("local_restart_tooltip"))
         connect_signal(
             self.local_server_restart_button.clicked, self.restart_server
@@ -259,6 +258,7 @@ class ServerTab(QWidget):
         self.local_listbox.setSelectionBehavior(
             QTreeWidget.SelectionBehavior.SelectRows
         )
+        set_min_column_widths(self.local_listbox, [110, 100, 160, 200])
 
         layout.addLayout(self.local_control_layout1)
         layout.addLayout(self.local_actions_layout)
