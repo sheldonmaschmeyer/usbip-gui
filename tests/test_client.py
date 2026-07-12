@@ -2,7 +2,9 @@
 
 # pylint: disable=duplicate-code
 
-from unittest.mock import patch, MagicMock, mock_open
+from unittest.mock import MagicMock, mock_open, patch
+from PyQt6.QtWidgets import QMessageBox
+
 from usbip_gui.gui.client import (
     ClientTab,
     parse_remote_list,
@@ -15,27 +17,15 @@ from usbip_gui.gui.client import (
 )
 
 
-@patch("usbip_gui.gui.client.BooleanVar")
-@patch("usbip_gui.gui.client.Frame")
-@patch("usbip_gui.gui.client.Treeview")
-@patch("usbip_gui.gui.client.Button")
 @patch("usbip_gui.gui.client.list_remote_usb", return_value=[])
 @patch("usbip_gui.gui.client.list_attached_usb", return_value=[])
-# pylint: disable=too-many-arguments,too-many-positional-arguments
 def test_client_tab_init(
     _mock_attached: MagicMock,
     _mock_remote: MagicMock,
-    _mock_button: MagicMock,
-    _mock_tree: MagicMock,
-    mock_frame: MagicMock,
-    _mock_bool: MagicMock,
 ):
     """Test ClientTab initialization."""
-    mock_parent = MagicMock()
-    tab = ClientTab(mock_parent)
+    tab = ClientTab(None)
 
-    mock_frame.assert_called()
-    assert tab.frame is not None
     assert tab.remote_listbox is not None
 
 
@@ -74,9 +64,12 @@ def test_get_or_create_client_tunnel_insecure():
 @patch("usbip_gui.gui.client.subprocess.Popen")
 @patch("usbip_gui.gui.client.tunnel_state")
 @patch("usbip_gui.gui.client.os.path.exists", return_value=False)
-@patch("usbip_gui.gui.client.messagebox.askyesno", return_value=True)
+@patch(
+    "usbip_gui.gui.client.QMessageBox.question",
+    return_value=QMessageBox.StandardButton.Yes,
+)
 @patch("usbip_gui.gui.client.os.makedirs")
-@patch("builtins.open", new_callable=MagicMock)
+@patch("builtins.open", new_callable=mock_open, read_data="{}")
 def test_get_or_create_client_tunnel_secure_cached(
     _mock_open: MagicMock,
     _mock_makedirs: MagicMock,
@@ -107,10 +100,13 @@ def test_get_or_create_client_tunnel_secure_cached(
 @patch("usbip_gui.gui.client.ssl.create_default_context")
 @patch("usbip_gui.gui.client.subprocess.Popen")
 @patch("usbip_gui.gui.client.tunnel_state")
-@patch("usbip_gui.gui.client.messagebox.askyesno", return_value=True)
+@patch(
+    "usbip_gui.gui.client.QMessageBox.question",
+    return_value=QMessageBox.StandardButton.Yes,
+)
 @patch("usbip_gui.gui.client.os.path.exists", return_value=False)
 @patch("usbip_gui.gui.client.os.makedirs")
-@patch("builtins.open", new_callable=MagicMock)
+@patch("builtins.open", new_callable=mock_open, read_data="{}")
 def test_get_or_create_client_tunnel_secure_new(
     _mock_open: MagicMock,
     _mock_makedirs: MagicMock,
@@ -140,7 +136,10 @@ def test_get_or_create_client_tunnel_secure_new(
 
 @patch("usbip_gui.gui.client.socket.create_connection")
 @patch("usbip_gui.gui.client.ssl.create_default_context")
-@patch("usbip_gui.gui.client.messagebox.askyesno", return_value=False)
+@patch(
+    "usbip_gui.gui.client.QMessageBox.question",
+    return_value=QMessageBox.StandardButton.No,
+)
 @patch("usbip_gui.gui.client.os.path.exists", return_value=False)
 def test_get_or_create_client_tunnel_reject_cert(
     _mock_exists: MagicMock,
@@ -162,11 +161,14 @@ def test_get_or_create_client_tunnel_reject_cert(
 
 @patch("usbip_gui.gui.client.socket.create_connection")
 @patch("usbip_gui.gui.client.ssl.create_default_context")
-@patch("usbip_gui.gui.client.messagebox.askyesno", return_value=True)
-@patch("usbip_gui.gui.client.messagebox.showerror")
+@patch(
+    "usbip_gui.gui.client.QMessageBox.question",
+    return_value=QMessageBox.StandardButton.Yes,
+)
+@patch("usbip_gui.gui.client.QMessageBox.critical")
 @patch("usbip_gui.gui.client.os.path.exists", return_value=False)
 @patch("usbip_gui.gui.client.os.makedirs")
-@patch("builtins.open", new_callable=MagicMock)
+@patch("builtins.open", new_callable=mock_open, read_data="{}")
 def test_get_or_create_client_tunnel_auth_fail(
     _mock_open: MagicMock,
     _mock_makedirs: MagicMock,
@@ -240,34 +242,38 @@ def test_detach_remote_usb(mock_run: MagicMock):
     )
 
 
-@patch("usbip_gui.gui.client.messagebox.showwarning")
+@patch("usbip_gui.gui.client.QMessageBox.warning")
 def test_check_secure_warning(mock_warning: MagicMock):
     """Test check secure warning."""
-    var = MagicMock()
-    var.get.return_value = False
-    ClientTab.check_secure_warning(MagicMock(), var)
+    ClientTab.check_secure_warning(MagicMock(), 0)
     mock_warning.assert_called_once()
 
 
+@patch("usbip_gui.gui.client.QTreeWidgetItem")
 @patch("usbip_gui.gui.client.list_remote_usb")
-def test_refresh_remote(mock_list: MagicMock):
+def test_refresh_remote(mock_list: MagicMock, mock_item: MagicMock):
     """Test refresh remote."""
     mock_list.return_value = [("1-1", "Man", "Desc")]
     tab = MagicMock()
-    tab.remote_port_input.get.return_value = "1234"
+    tab.remote_port_input.text.return_value = "1234"
     ClientTab.refresh_remote(tab)
-    tab.remote_listbox.delete.assert_called_once()
-    tab.remote_listbox.insert.assert_called_once()
+    tab.remote_listbox.clear.assert_called_once()
+    mock_item.assert_called_once_with(
+        tab.remote_listbox, ["1-1", "Man", "Desc"]
+    )
 
 
+@patch("usbip_gui.gui.client.QTreeWidgetItem")
 @patch("usbip_gui.gui.client.list_attached_usb")
-def test_refresh_attached(mock_list: MagicMock):
+def test_refresh_attached(mock_list: MagicMock, mock_item: MagicMock):
     """Test refresh attached."""
     mock_list.return_value = [("127.0.0.1", 1, "1-1", "Man", "Desc")]
     tab = MagicMock()
     ClientTab.refresh_attached(tab)
-    tab.attached_listbox.delete.assert_called_once()
-    tab.attached_listbox.insert.assert_called_once()
+    tab.attached_listbox.clear.assert_called_once()
+    mock_item.assert_called_once_with(
+        tab.attached_listbox, ["127.0.0.1", "1", "1-1", "Man", "Desc"]
+    )
 
 
 @patch("usbip_gui.gui.client.time.sleep")
@@ -301,7 +307,7 @@ def test_on_double_click_remote():
     """Test remote double click."""
     tab = MagicMock()
     tab.remote_listbox.selection.return_value = ["item"]
-    ClientTab.on_double_click_remote(tab, MagicMock())
+    ClientTab.on_double_click_remote(tab, MagicMock(), 0)
     tab.attach_remote.assert_called_once()
 
 
@@ -309,7 +315,7 @@ def test_on_double_click_attached():
     """Test attached double click."""
     tab = MagicMock()
     tab.attached_listbox.selection.return_value = ["item"]
-    ClientTab.on_double_click_attached(tab, MagicMock())
+    ClientTab.on_double_click_attached(tab, MagicMock(), 0)
     tab.detach_remote.assert_called_once()
 
 
@@ -321,7 +327,7 @@ def test_parse_remote_list_short():
 
 @patch("usbip_gui.gui.client.socket.create_connection")
 @patch("usbip_gui.gui.client.ssl.create_default_context")
-@patch("usbip_gui.gui.client.messagebox.showerror")
+@patch("usbip_gui.gui.client.QMessageBox.critical")
 def test_get_or_create_client_tunnel_no_cert(
     _mock_error: MagicMock, mock_ctx: MagicMock, _mock_conn: MagicMock
 ):
@@ -337,7 +343,10 @@ def test_get_or_create_client_tunnel_no_cert(
     assert target == ""
 
 
-@patch("usbip_gui.gui.client.os.path.exists", return_value=True)
+@patch(
+    "usbip_gui.gui.client.os.path.exists",
+    return_value=QMessageBox.StandardButton.Yes,
+)
 @patch(
     "builtins.open",
     new_callable=mock_open,
@@ -365,10 +374,13 @@ def test_get_or_create_client_tunnel_known_hosts(
 
 @patch("usbip_gui.gui.client.socket.create_connection")
 @patch("usbip_gui.gui.client.ssl.create_default_context")
-@patch("usbip_gui.gui.client.messagebox.askyesno", return_value=True)
-@patch("builtins.open", new_callable=mock_open)
+@patch(
+    "usbip_gui.gui.client.QMessageBox.question",
+    return_value=QMessageBox.StandardButton.Yes,
+)
+@patch("builtins.open", new_callable=mock_open, read_data="{}")
 def test_get_or_create_client_tunnel_no_password(
-    _mock_open_f: MagicMock,
+    _mock_open: MagicMock,
     _mock_ask: MagicMock,
     mock_ctx: MagicMock,
     _mock_conn: MagicMock,
@@ -379,7 +391,7 @@ def test_get_or_create_client_tunnel_no_password(
         mock_ctx.return_value.wrap_socket.return_value.__enter__.return_value
     )
     mock_ssock.getpeercert.return_value = b"der"
-    with patch("usbip_gui.gui.client.messagebox.showerror") as mock_err:
+    with patch("usbip_gui.gui.client.QMessageBox.critical") as mock_err:
         target, _port = get_or_create_client_tunnel(
             "localhost", 1234, True, ""
         )
@@ -389,7 +401,10 @@ def test_get_or_create_client_tunnel_no_password(
 
 @patch("usbip_gui.gui.client.socket.create_connection")
 @patch("usbip_gui.gui.client.ssl.create_default_context")
-@patch("usbip_gui.gui.client.messagebox.askyesno", return_value=True)
+@patch(
+    "usbip_gui.gui.client.QMessageBox.question",
+    return_value=QMessageBox.StandardButton.Yes,
+)
 @patch("builtins.open", new_callable=mock_open)
 def test_get_or_create_client_tunnel_mismatch(
     _mock_open_f: MagicMock,
@@ -403,7 +418,7 @@ def test_get_or_create_client_tunnel_mismatch(
         mock_ctx.return_value.wrap_socket.return_value.__enter__.return_value
     )
     mock_ssock.getpeercert.side_effect = [b"der", b"der2"]
-    with patch("usbip_gui.gui.client.messagebox.showerror") as mock_err:
+    with patch("usbip_gui.gui.client.QMessageBox.critical") as mock_err:
         target, _port = get_or_create_client_tunnel(
             "localhost", 1234, True, "pass"
         )
@@ -412,7 +427,10 @@ def test_get_or_create_client_tunnel_mismatch(
 
 
 @patch("usbip_gui.gui.client.tunnel_state")
-@patch("usbip_gui.gui.client.messagebox.askyesno", return_value=True)
+@patch(
+    "usbip_gui.gui.client.QMessageBox.question",
+    return_value=QMessageBox.StandardButton.Yes,
+)
 @patch("builtins.open", new_callable=mock_open)
 def test_get_or_create_client_tunnel_kill(
     _mock_open: MagicMock, _mock_ask: MagicMock, mock_state: MagicMock
@@ -439,61 +457,60 @@ def test_get_or_create_client_tunnel_kill(
         mock_proc.kill.assert_called_once()
 
 
-@patch("usbip_gui.gui.client.BooleanVar")
 @patch("usbip_gui.gui.client.list_remote_usb")
 @patch("usbip_gui.gui.client.list_attached_usb")
-def test_client_ui_errors(
-    mock_attached: MagicMock, mock_remote: MagicMock, _mock_bool: MagicMock
-):
+def test_client_ui_errors(mock_attached: MagicMock, mock_remote: MagicMock):
     """Test client ui errors."""
 
     mock_remote.return_value = [("a", "b", "c")]
     mock_attached.return_value = [("a", 1, "b", "c", "d")]
-    parent = MagicMock()
+    parent = None
     client_tab = ClientTab(parent)
 
     with (
-        patch.object(client_tab.remote_listbox, "selection", return_value=()),
         patch.object(
-            client_tab.attached_listbox, "selection", return_value=()
+            client_tab.remote_listbox, "selectedItems", return_value=()
+        ),
+        patch.object(
+            client_tab.attached_listbox, "selectedItems", return_value=()
         ),
     ):
         with (
-            patch("usbip_gui.gui.client.messagebox.showerror") as mock_err,
+            patch("usbip_gui.gui.client.QMessageBox.critical") as mock_err,
             patch.object(
-                client_tab.remote_ip_input, "get", return_value="localhost"
+                client_tab.remote_ip_input, "text", return_value="localhost"
             ),
             patch.object(
-                client_tab.remote_port_input, "get", return_value="abc"
+                client_tab.remote_port_input, "text", return_value="abc"
             ),
         ):
             client_tab.refresh_remote()
             mock_err.assert_called_once()
 
         with (
-            patch("usbip_gui.gui.client.messagebox.showerror") as mock_err,
+            patch("usbip_gui.gui.client.QMessageBox.critical") as mock_err,
             patch.object(
-                client_tab.remote_ip_input, "get", return_value="localhost"
+                client_tab.remote_ip_input, "text", return_value="localhost"
             ),
             patch.object(
-                client_tab.remote_port_input, "get", return_value="abc"
+                client_tab.remote_port_input, "text", return_value="abc"
             ),
         ):
             client_tab.attach_remote()
             mock_err.assert_called_once()
 
         with (
-            patch("usbip_gui.gui.client.messagebox.showerror") as mock_err,
+            patch("usbip_gui.gui.client.QMessageBox.critical") as mock_err,
             patch.object(
-                client_tab.remote_ip_input, "get", return_value="localhost"
+                client_tab.remote_ip_input, "text", return_value="localhost"
             ),
             patch.object(
-                client_tab.remote_port_input, "get", return_value="1234"
+                client_tab.remote_port_input, "text", return_value="1234"
             ),
         ):
             client_tab.attach_remote()
             mock_err.assert_called_once()
 
-        with patch("usbip_gui.gui.client.messagebox.showerror") as mock_err:
+        with patch("usbip_gui.gui.client.QMessageBox.critical") as mock_err:
             client_tab.detach_remote()
             mock_err.assert_called_once()

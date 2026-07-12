@@ -4,3 +4,4 @@ build/
 .zsh_history
 .coverage
 htmlcov/
+.vscode

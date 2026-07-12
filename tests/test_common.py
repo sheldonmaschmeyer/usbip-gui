@@ -7,7 +7,6 @@ from usbip_gui.gui.common import (
     cleanup_tunnels,
     tunnel_state,
     get_translator,
-    ToolTip,
     get_config_dir,
 )
 
@@ -79,37 +78,6 @@ def test_get_translator_other(mock_trans: MagicMock, mock_exists: MagicMock):
     assert t_func == "mocked"
     assert mock_trans.call_count == 2
     mock_trans.return_value.add_fallback.assert_called_once()
-
-
-@patch("usbip_gui.gui.common.tk.Toplevel")
-@patch("usbip_gui.gui.common.tk.Label")
-def test_tooltip(mock_label: MagicMock, mock_top: MagicMock):
-    """Test ToolTip functionality."""
-    widget = MagicMock()
-    widget.winfo_rootx.return_value = 100
-    widget.winfo_rooty.return_value = 100
-
-    tt = ToolTip(widget, "test")
-    widget.bind.assert_any_call("<Enter>", tt.show_tooltip)
-    widget.bind.assert_any_call("<Leave>", tt.hide_tooltip)
-
-    tt.show_tooltip()
-    mock_top.assert_called_once_with(widget)
-    mock_label.assert_called_once()
-    assert tt.tooltip_window is not None
-
-    # second call should return early
-    mock_top.reset_mock()
-    tt.show_tooltip()
-    mock_top.assert_not_called()
-
-    # hide tooltip
-    tt.hide_tooltip()
-    mock_top.return_value.destroy.assert_called_once()
-    assert tt.tooltip_window is None
-
-    # hide when None
-    tt.hide_tooltip()
 
 
 @patch("usbip_gui.gui.common.Path.mkdir")

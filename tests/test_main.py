@@ -1,7 +1,7 @@
 """Tests for the main entry points."""
 
 import runpy
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 
 @patch("usbip_gui.gui.start_app")

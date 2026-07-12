@@ -13,7 +13,8 @@ RUN apt-get update && apt-get install -y \
     hwdata \
     python3 \
     python3-pip \
-    python3-tk \
+    python3-pyqt6 \
+    libxcb-cursor0 \
     sudo \
     zsh \
     git \

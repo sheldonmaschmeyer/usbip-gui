@@ -27,6 +27,9 @@ jobs:
           locked: false
           manifest-path: pixi.toml
 
+      - name: Install Qt system dependencies
+        run: sudo apt-get update && sudo apt-get install -y python3-pyqt6 xvfb
+
       - name: Run Black Formatting Check
         run: pixi run black --check .
 

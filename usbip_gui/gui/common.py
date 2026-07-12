@@ -2,7 +2,6 @@
 
 import subprocess
 import atexit
-import tkinter as tk
 from typing import Optional, Dict, Tuple, Callable, Union, List
 import gettext
 from pathlib import Path
@@ -23,8 +22,6 @@ JsonDict = Dict[str, JsonValue]
 
 def get_config_dir() -> Path:
     """Get the configuration directory."""
-    # While not ready for Windows today, this will assist with cross-platform
-    # compatibility in the future.
     if sys.platform == "win32":
         base_dir = os.environ.get("APPDATA") or (
             Path.home() / "AppData" / "Roaming"
@@ -121,43 +118,3 @@ def cleanup_tunnels() -> None:
 
 
 atexit.register(cleanup_tunnels)
-
-
-class ToolTip:
-    """Tooltip."""
-
-    def __init__(self, widget: tk.Widget, text: str) -> None:
-        """Initialize the class instance."""
-        self.widget = widget
-        self.text = text
-        self.tooltip_window: Optional[tk.Toplevel] = None
-        self.widget.bind("<Enter>", self.show_tooltip)
-        self.widget.bind("<Leave>", self.hide_tooltip)
-
-    def show_tooltip(self, _event: Optional[tk.Event] = None) -> None:
-        """Show tooltip."""
-        if self.tooltip_window or not self.text:
-            return
-        x = self.widget.winfo_rootx() + 25
-        y = self.widget.winfo_rooty() + 20
-        self.tooltip_window = tw = tk.Toplevel(self.widget)
-        tw.wm_overrideredirect(True)
-        tw.wm_geometry(f"+{x}+{y}")
-
-        label = tk.Label(
-            tw,
-            text=self.text,
-            justify="left",
-            background="#313244",
-            foreground="#cdd6f4",
-            relief="solid",
-            borderwidth=1,
-            font=("Ubuntu", 10),
-        )
-        label.pack(ipadx=5, ipady=3)
-
-    def hide_tooltip(self, _event: Optional[tk.Event] = None) -> None:
-        """Hide tooltip."""
-        if self.tooltip_window:
-            self.tooltip_window.destroy()
-            self.tooltip_window = None

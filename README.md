@@ -151,6 +151,7 @@ developing or contributing, the following commands are available:
 - [x] reducing/eliminating global variable usage
 - [x] Add SSL/SSH encryption feature.
 - [x] Move code into modules, i.e. compartmentalize sections of the gui.py.
+- [x] Migrate tkinter to Qt.
 - [ ] Optional: Windows compatibility; pixi without docker.
 - [ ] Optional: Windows installer version, fully packaged.
 - [x] Cross-architecture (ARM and x86) production testing.

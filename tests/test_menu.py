@@ -1,44 +1,36 @@
 """Tests for the menu components."""
 
-from unittest.mock import patch, MagicMock
-from usbip_gui.gui.menu.menu import create_main_menu
+from unittest.mock import MagicMock, patch
+
 from usbip_gui.gui.menu.about import show_about_dialog
 from usbip_gui.gui.menu.language_switcher import toggle_language
+from usbip_gui.gui.menu.menu import create_main_menu
 
 
-@patch("usbip_gui.gui.menu.menu.Menu")
-def test_create_main_menu(mock_menu: MagicMock):
+@patch("usbip_gui.gui.menu.menu.QActionGroup")
+@patch("usbip_gui.gui.menu.menu.QAction")
+def test_create_main_menu(_mock_action: MagicMock, _mock_group: MagicMock):
     """Test creation of the main application menu."""
     mock_app = MagicMock()
     create_main_menu(mock_app)
 
-    mock_menu.assert_called()
-    assert mock_app.root.config.called
+    mock_app.root.menuBar.assert_called_once()
 
 
-@patch("usbip_gui.gui.menu.about.tk.Toplevel")
-@patch("usbip_gui.gui.menu.about.tk.Label")
-@patch("usbip_gui.gui.menu.about.Button")
-def test_show_about(
-    _mock_button: MagicMock, _mock_label: MagicMock, mock_toplevel: MagicMock
-):
+@patch("usbip_gui.gui.menu.about.QMessageBox.about")
+def test_show_about(mock_about: MagicMock):
     """Test the about dialog popup."""
     show_about_dialog()
-    mock_toplevel.assert_called_once()
-    mock_toplevel.return_value.title.assert_called_once()
+    mock_about.assert_called_once()
 
 
-@patch("usbip_gui.gui.menu.about.Button")
-@patch("usbip_gui.gui.menu.about.tk.Toplevel")
-def test_show_about_with_parent(
-    mock_toplevel: MagicMock, _mock_button: MagicMock
-):
+@patch("usbip_gui.gui.menu.about.QMessageBox.about")
+def test_show_about_with_parent(mock_about: MagicMock):
     """Test show about dialog with parent."""
     parent = MagicMock()
     show_about_dialog(parent)
-    mock_toplevel.return_value.transient.assert_called_once_with(parent)
-    mock_toplevel.return_value.grab_set.assert_called_once()
-    _mock_button.assert_called_once()
+    mock_about.assert_called_once()
+    assert mock_about.call_args[0][0] == parent
 
 
 @patch("usbip_gui.gui.menu.language_switcher.os.execv")
