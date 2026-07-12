@@ -1,8 +1,17 @@
 QMainWindow { background-color: #1e1e2e; color: #cdd6f4; }
 QWidget { background-color: #1e1e2e; color: #cdd6f4; }
 QTabWidget::pane { border: 1px solid #313244; }
-QTabBar::tab { background: #313244; color: #cdd6f4; padding: 10px; }
-QTabBar::tab:selected { background: #1e1e2e; color: #89b4fa; }
+QTabBar::tab {
+    background: #313244;
+    color: #cdd6f4;
+    padding: 10px;
+    border-top: 2px solid transparent;
+}
+QTabBar::tab:selected {
+    background: #1e1e2e;
+    color: #89b4fa;
+    border-top: 2px solid #89b4fa;
+}
 QLineEdit {
     background: #181825;
     border: 1px solid #313244;
