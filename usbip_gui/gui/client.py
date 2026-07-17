@@ -14,6 +14,7 @@ import time
 from typing import List, Tuple
 from urllib.parse import urlparse
 
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -37,11 +38,11 @@ from .common import (
 
 t = get_translator("client")
 
-DEVICE_COLUMNS = [t("Bus ID"), t("Manufacturer"), t("Description")]
-ATTACHED_COLUMNS = [
+DEVICE_COLUMNS = [
     t("Host"),
     t("Port"),
     t("Bus ID"),
+    t("State"),
     t("Manufacturer"),
     t("Description"),
 ]
@@ -332,6 +333,10 @@ class ClientTab(QWidget):
             self.remote_list_attach_button.clicked, self.attach_remote
         )
 
+        self.detach_button = QPushButton(t("Detach Device"))
+        self.detach_button.setToolTip(t("attached_detach_tooltip"))
+        connect_signal(self.detach_button.clicked, self.detach_remote)
+
         self.remote_control_layout.addWidget(self.remote_list_label)
         self.remote_control_layout.addWidget(self.remote_ip_input)
         self.remote_control_layout.addWidget(self.remote_port_input)
@@ -339,6 +344,7 @@ class ClientTab(QWidget):
         self.remote_control_layout.addWidget(self.remote_password_input)
         self.remote_control_layout.addWidget(self.remote_list_refresh_button)
         self.remote_control_layout.addWidget(self.remote_list_attach_button)
+        self.remote_control_layout.addWidget(self.detach_button)
         self.remote_control_layout.addStretch()
 
         # Remote List
@@ -352,49 +358,12 @@ class ClientTab(QWidget):
         self.remote_listbox.setSelectionBehavior(
             QTreeWidget.SelectionBehavior.SelectRows
         )
-        set_min_column_widths(self.remote_listbox, [100, 160, 200])
-
-        # Attached Control Frame
-        self.attached_control_layout = QHBoxLayout()
-        self.attached_list_label = QLabel(t("Attached Devices"))
-
-        self.attached_list_refresh_button = QPushButton(t("Refresh"))
-        self.attached_list_refresh_button.setToolTip(
-            t("attached_refresh_tooltip")
+        set_min_column_widths(
+            self.remote_listbox, [100, 60, 100, 120, 160, 200]
         )
-        connect_signal(
-            self.attached_list_refresh_button.clicked, self.refresh_attached
-        )
-
-        self.detach_button = QPushButton(t("Detach Device"))
-        self.detach_button.setToolTip(t("attached_detach_tooltip"))
-        connect_signal(self.detach_button.clicked, self.detach_remote)
-
-        self.attached_control_layout.addWidget(self.attached_list_label)
-        self.attached_control_layout.addWidget(
-            self.attached_list_refresh_button
-        )
-        self.attached_control_layout.addWidget(self.detach_button)
-        self.attached_control_layout.addStretch()
-
-        # Attached List
-        self.attached_listbox = QTreeWidget()
-        set_header_labels(self.attached_listbox, ATTACHED_COLUMNS)
-        self.attached_listbox.setSortingEnabled(True)
-        connect_signal(
-            self.attached_listbox.itemDoubleClicked,
-            self.on_double_click_attached,
-        )
-        self.attached_listbox.setRootIsDecorated(False)
-        self.attached_listbox.setSelectionBehavior(
-            QTreeWidget.SelectionBehavior.SelectRows
-        )
-        set_min_column_widths(self.attached_listbox, [120, 60, 100, 160, 200])
 
         layout.addLayout(self.remote_control_layout)
         layout.addWidget(self.remote_listbox)
-        layout.addLayout(self.attached_control_layout)
-        layout.addWidget(self.attached_listbox)
 
     def check_secure_warning(self, state: int):
         """Check secure warning."""
@@ -413,28 +382,62 @@ class ClientTab(QWidget):
         password = self.remote_password_input.text()
 
         remote_devices = list_remote_usb(server_ip, port, secure, password)
+        attached_devices = list_attached_usb()
         self.remote_listbox.clear()
-        for device in remote_devices:
+
+        attached_by_busid = {d[2]: d for d in attached_devices}
+
+        for r_bus_id, manufacturer, description in remote_devices:
+            status = t("Detached")
+            local_port = -1
+            if r_bus_id in attached_by_busid:
+                status = t("Attached")
+                att = attached_by_busid.pop(r_bus_id)
+                local_port = att[1]
+
             item = SortableTreeWidgetItem(
-                self.remote_listbox, [str(d) for d in device]
+                self.remote_listbox,
+                [
+                    server_ip,
+                    str(port),
+                    r_bus_id,
+                    status,
+                    manufacturer,
+                    description,
+                ],
             )
+            item.setData(0, Qt.ItemDataRole.UserRole, local_port)
+            self.remote_listbox.addTopLevelItem(item)
+
+        for (
+            host,
+            att_port,
+            a_bus_id,
+            manufacturer,
+            description,
+        ) in attached_by_busid.values():
+            status = t("Attached")
+            display_host = host
+            display_port = ""
+            if ":" in host:
+                display_host, display_port = host.split(":", 1)
+
+            item = SortableTreeWidgetItem(
+                self.remote_listbox,
+                [
+                    display_host,
+                    display_port,
+                    a_bus_id,
+                    status,
+                    manufacturer,
+                    description,
+                ],
+            )
+            item.setData(0, Qt.ItemDataRole.UserRole, att_port)
             self.remote_listbox.addTopLevelItem(item)
 
         for i in range(len(DEVICE_COLUMNS)):
             self.remote_listbox.resizeColumnToContents(i)
-
-    def refresh_attached(self):
-        """Refresh attached."""
-        attached_devices = list_attached_usb()
-        self.attached_listbox.clear()
-        for attached_device in attached_devices:
-            item = SortableTreeWidgetItem(
-                self.attached_listbox, [str(d) for d in attached_device]
-            )
-            self.attached_listbox.addTopLevelItem(item)
-
-        for i in range(len(ATTACHED_COLUMNS)):
-            self.attached_listbox.resizeColumnToContents(i)
 
     def attach_remote(self):
         """Attach remote."""
@@ -450,38 +453,55 @@ class ClientTab(QWidget):
             QMessageBox.critical(self, t("Error"), t("no selection to attach"))
             return
 
+        status = selection[0].text(3)
+        if status == t("Attached"):
+            QMessageBox.information(
+                self, t("Info"), t("Device is already attached.")
+            )
+            return
+
         secure = self.remote_secure_checkbox.isChecked()
         password = self.remote_password_input.text()
-        bus_id = selection[0].text(0)
+        bus_id = selection[0].text(2)
 
         attach_remote_usb(server_ip, bus_id, port, secure, password)
         time.sleep(0.5)
         self.refresh_remote()
-        self.refresh_attached()
 
     def detach_remote(self):
         """Detach remote."""
-        selection = self.attached_listbox.selectedItems()
+        selection = self.remote_listbox.selectedItems()
         if not selection:
             QMessageBox.critical(self, t("Error"), t("no selection to detach"))
             return
 
-        port = int(selection[0].text(1))
-        detach_remote_usb(port)
+        status = selection[0].text(3)
+        if status != t("Attached"):
+            QMessageBox.information(
+                self, t("Info"), t("Device is not attached.")
+            )
+            return
+
+        local_port = selection[0].data(0, Qt.ItemDataRole.UserRole)
+        if local_port is None or local_port == -1:
+            QMessageBox.critical(
+                self,
+                t("Error"),
+                t("Could not find local port for detachment."),
+            )
+            return
+
+        detach_remote_usb(local_port)
         time.sleep(0.5)
         self.refresh_remote()
-        self.refresh_attached()
 
     def on_double_click_remote(
         self, _item: SortableTreeWidgetItem, _column: int
     ) -> None:
-        """Attach remote usb on double click."""
+        """Attach or detach remote usb on double click."""
         if _item:
-            self.attach_remote()
-
-    def on_double_click_attached(
-        self, _item: SortableTreeWidgetItem, _column: int
-    ) -> None:
-        """Detach remote usb on double click."""
-        if _item:
-            self.detach_remote()
+            status = _item.text(3)
+            if status == t("Attached"):
+                self.detach_remote()
+            else:
+                self.attach_remote()

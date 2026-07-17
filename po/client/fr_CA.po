@@ -61,3 +61,9 @@ msgstr ""
 
 msgid "auth_failed_msg"
 msgstr "Échec de l'authentification. Veuillez vérifier votre mot de passe."
+
+msgid "Attached"
+msgstr "Attaché"
+
+msgid "Detached"
+msgstr "Détaché"

@@ -251,28 +251,23 @@ def test_check_secure_warning(mock_warning: MagicMock):
 
 @patch("usbip_gui.gui.client.SortableTreeWidgetItem")
 @patch("usbip_gui.gui.client.list_remote_usb")
-def test_refresh_remote(mock_list: MagicMock, mock_item: MagicMock):
+@patch("usbip_gui.gui.client.list_attached_usb")
+def test_refresh_remote(
+    mock_attached_list: MagicMock,
+    mock_remote_list: MagicMock,
+    mock_item: MagicMock,
+):
     """Test refresh remote."""
-    mock_list.return_value = [("1-1", "Man", "Desc")]
+    mock_remote_list.return_value = [("1-1", "Man", "Desc")]
+    mock_attached_list.return_value = []
     tab = MagicMock()
+    tab.remote_ip_input.text.return_value = "localhost"
     tab.remote_port_input.text.return_value = "1234"
     ClientTab.refresh_remote(tab)
     tab.remote_listbox.clear.assert_called_once()
     mock_item.assert_called_once_with(
-        tab.remote_listbox, ["1-1", "Man", "Desc"]
-    )
-
-
-@patch("usbip_gui.gui.client.SortableTreeWidgetItem")
-@patch("usbip_gui.gui.client.list_attached_usb")
-def test_refresh_attached(mock_list: MagicMock, mock_item: MagicMock):
-    """Test refresh attached."""
-    mock_list.return_value = [("127.0.0.1", 1, "1-1", "Man", "Desc")]
-    tab = MagicMock()
-    ClientTab.refresh_attached(tab)
-    tab.attached_listbox.clear.assert_called_once()
-    mock_item.assert_called_once_with(
-        tab.attached_listbox, ["127.0.0.1", "1", "1-1", "Man", "Desc"]
+        tab.remote_listbox,
+        ["localhost", "1234", "1-1", "Detached", "Man", "Desc"],
     )
 
 
@@ -287,7 +282,6 @@ def test_attach_remote_ui(mock_attach: MagicMock, _mock_sleep: MagicMock):
     ClientTab.attach_remote(tab)
     mock_attach.assert_called_once()
     tab.refresh_remote.assert_called_once()
-    tab.refresh_attached.assert_called_once()
 
 
 @patch("usbip_gui.gui.client.time.sleep")
@@ -295,12 +289,14 @@ def test_attach_remote_ui(mock_attach: MagicMock, _mock_sleep: MagicMock):
 def test_detach_remote_ui(mock_detach: MagicMock, _mock_sleep: MagicMock):
     """Test detach remote from UI."""
     tab = MagicMock()
-    tab.attached_listbox.selection.return_value = ["item1"]
-    tab.attached_listbox.item.return_value = {"values": ["host", "1"]}
+    tab.remote_listbox.selectedItems.return_value = [MagicMock()]
+    tab.remote_listbox.selectedItems.return_value[0].text.return_value = (
+        "Attached"
+    )
+    tab.remote_listbox.selectedItems.return_value[0].data.return_value = 1
     ClientTab.detach_remote(tab)
     mock_detach.assert_called_once_with(1)
     tab.refresh_remote.assert_called_once()
-    tab.refresh_attached.assert_called_once()
 
 
 def test_on_double_click_remote():
@@ -309,14 +305,6 @@ def test_on_double_click_remote():
     tab.remote_listbox.selection.return_value = ["item"]
     ClientTab.on_double_click_remote(tab, MagicMock(), 0)
     tab.attach_remote.assert_called_once()
-
-
-def test_on_double_click_attached():
-    """Test attached double click."""
-    tab = MagicMock()
-    tab.attached_listbox.selection.return_value = ["item"]
-    ClientTab.on_double_click_attached(tab, MagicMock(), 0)
-    tab.detach_remote.assert_called_once()
 
 
 def test_parse_remote_list_short():
@@ -467,13 +455,8 @@ def test_client_ui_errors(mock_attached: MagicMock, mock_remote: MagicMock):
     parent = None
     client_tab = ClientTab(parent)
 
-    with (
-        patch.object(
-            client_tab.remote_listbox, "selectedItems", return_value=()
-        ),
-        patch.object(
-            client_tab.attached_listbox, "selectedItems", return_value=()
-        ),
+    with patch.object(
+        client_tab.remote_listbox, "selectedItems", return_value=()
     ):
         with (
             patch("usbip_gui.gui.client.QMessageBox.critical") as mock_err,
@@ -514,3 +497,80 @@ def test_client_ui_errors(mock_attached: MagicMock, mock_remote: MagicMock):
         with patch("usbip_gui.gui.client.QMessageBox.critical") as mock_err:
             client_tab.detach_remote()
             mock_err.assert_called_once()
+
+
+def test_refresh_remote_with_attached():
+    """Test refresh remote with devices already attached."""
+    with patch("usbip_gui.gui.client.list_remote_usb") as mock_remote:
+        with patch("usbip_gui.gui.client.list_attached_usb") as mock_attached:
+            mock_remote.return_value = [("1-1", "Man", "Desc")]
+            mock_attached.return_value = [
+                ("localhost:1234", 1, "1-1", "Man", "Desc"),
+                ("localhost:4321", 2, "1-2", "Man2", "Desc2"),
+            ]
+            tab = ClientTab(None)
+            tab.remote_ip_input.setText("localhost")
+            tab.remote_port_input.setText("1234")
+
+            with patch.object(
+                tab.remote_listbox, "addTopLevelItem"
+            ) as mock_add:
+                tab.refresh_remote()
+                assert mock_add.call_count == 2
+
+
+def test_attach_remote_already_attached():
+    """Test attaching an already attached device."""
+    tab = ClientTab(None)
+    tab.remote_ip_input.setText("localhost")
+    tab.remote_port_input.setText("1234")
+
+    item = MagicMock()
+    item.text.return_value = "Attached"
+    with patch.object(
+        tab.remote_listbox, "selectedItems", return_value=[item]
+    ):
+        with patch(
+            "usbip_gui.gui.client.QMessageBox.information"
+        ) as mock_info:
+            tab.attach_remote()
+            mock_info.assert_called_once()
+
+
+def test_detach_remote_not_attached():
+    """Test detaching a device that is not attached."""
+    tab = ClientTab(None)
+    item = MagicMock()
+    item.text.return_value = "Detached"
+    with patch.object(
+        tab.remote_listbox, "selectedItems", return_value=[item]
+    ):
+        with patch(
+            "usbip_gui.gui.client.QMessageBox.information"
+        ) as mock_info:
+            tab.detach_remote()
+            mock_info.assert_called_once()
+
+
+def test_detach_remote_no_local_port():
+    """Test detaching a device without a local port."""
+    tab = ClientTab(None)
+    item = MagicMock()
+    item.text.return_value = "Attached"
+    item.data.return_value = -1
+    with patch.object(
+        tab.remote_listbox, "selectedItems", return_value=[item]
+    ):
+        with patch("usbip_gui.gui.client.QMessageBox.critical") as mock_crit:
+            tab.detach_remote()
+            mock_crit.assert_called_once()
+
+
+def test_on_double_click_remote_attached():
+    """Test double clicking an attached device."""
+    tab = ClientTab(None)
+    item = MagicMock()
+    item.text.return_value = "Attached"
+    with patch.object(tab, "detach_remote") as mock_detach:
+        tab.on_double_click_remote(item, 0)
+        mock_detach.assert_called_once()
