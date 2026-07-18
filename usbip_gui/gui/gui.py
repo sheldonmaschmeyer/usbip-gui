@@ -11,7 +11,7 @@ from PyQt6.QtGui import QAction, QIcon, QPixmap
 
 from usbip_gui.typings import connect_signal
 
-from .common import (
+from usbip_gui.common import (
     DEFAULT_GEOMETRY,
     get_translator,
     load_config,
@@ -177,7 +177,7 @@ def start_app():
         ),
         "setup_usbip.sh",
     )
-    if os.path.exists(script_path):
+    if sys.platform != "win32" and os.path.exists(script_path):
         modules = ["usbip_core", "usbip_host", "vhci_hcd"]
         if not all(os.path.exists(f"/sys/module/{mod}") for mod in modules):
             subprocess.run(["bash", script_path], check=False)

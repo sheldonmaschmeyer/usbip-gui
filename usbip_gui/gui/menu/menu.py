@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from PyQt6.QtGui import QAction, QActionGroup
 
 from usbip_gui.typings import connect_signal, add_action
-from ..common import get_translator
+from usbip_gui.common import get_translator
 from .about import show_about_dialog
 from .language_switcher import toggle_language
 

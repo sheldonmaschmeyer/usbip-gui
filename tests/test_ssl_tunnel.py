@@ -6,6 +6,7 @@ import sys
 from unittest.mock import MagicMock, patch
 
 from usbip_gui.ssl_tunnel import (
+    find_openssl,
     get_cert_fingerprint,
     generate_self_signed_cert,
     recv_exact,
@@ -17,12 +18,33 @@ from usbip_gui.ssl_tunnel import (
     start_client,
     main,
 )
+import usbip_gui.ssl_tunnel as ssl_tunnel_mod
 
 
 def test_get_cert_fingerprint_missing_file():
     """Test getting fingerprint of a missing file returns a fallback."""
     fingerprint = get_cert_fingerprint("/non/existent/path/to/cert.pem")
     assert fingerprint == "No certificate"
+
+
+def test_is_transient_windows_tls_abort_true():
+    """Test transient Windows TLS abort classifier true cases."""
+    is_transient = getattr(ssl_tunnel_mod, "_is_transient_windows_tls_abort")
+    err = OSError("boom")
+    err.winerror = 10053  # type: ignore[attr-defined]
+    assert is_transient(err)
+
+    err2 = OSError("boom")
+    err2.winerror = 10054  # type: ignore[attr-defined]
+    assert is_transient(err2)
+
+
+def test_is_transient_windows_tls_abort_false():
+    """Test transient Windows TLS abort classifier false case."""
+    is_transient = getattr(ssl_tunnel_mod, "_is_transient_windows_tls_abort")
+    err = OSError("boom")
+    err.winerror = 10060  # type: ignore[attr-defined]
+    assert not is_transient(err)
 
 
 @patch("usbip_gui.ssl_tunnel.os.path.exists")
@@ -48,8 +70,87 @@ def test_get_cert_fingerprint_existing(
 @patch("usbip_gui.ssl_tunnel.subprocess.run")
 def test_generate_self_signed_cert(mock_run: MagicMock):
     """Test generating a self-signed cert."""
+    mock_run.return_value.returncode = 0
     generate_self_signed_cert("/path/to/cert", "/path/to/key")
     mock_run.assert_called_once()
+
+
+@patch("usbip_gui.ssl_tunnel.find_openssl", return_value="/usr/bin/openssl")
+@patch("usbip_gui.ssl_tunnel.subprocess.run")
+def test_generate_self_signed_cert_failure(
+    mock_run: MagicMock, _mock_find: MagicMock
+):
+    """Test generate_self_signed_cert raises OSError with openssl's output."""
+    mock_run.return_value.returncode = 1
+    mock_run.return_value.stderr = "unable to load config info\n"
+    mock_run.return_value.stdout = ""
+    try:
+        generate_self_signed_cert("/path/to/cert", "/path/to/key")
+        assert False, "Expected OSError"
+    except OSError as e:
+        assert "unable to load config info" in str(e)
+
+
+@patch("usbip_gui.ssl_tunnel.find_openssl", return_value="/usr/bin/openssl")
+@patch("usbip_gui.ssl_tunnel.subprocess.run")
+def test_generate_self_signed_cert_uses_own_config(
+    mock_run: MagicMock, _mock_find: MagicMock
+):
+    """Test generate_self_signed_cert supplies its own minimal -config file."""
+    mock_run.return_value.returncode = 0
+    generate_self_signed_cert("/path/to/cert", "/path/to/key")
+    args = mock_run.call_args.args[0]
+    assert "-config" in args
+    config_path = args[args.index("-config") + 1]
+    # The temp config file is cleaned up after the call.
+    assert not os.path.exists(config_path)
+
+
+@patch("usbip_gui.ssl_tunnel.os.remove", side_effect=OSError)
+@patch("usbip_gui.ssl_tunnel.find_openssl", return_value="/usr/bin/openssl")
+@patch("usbip_gui.ssl_tunnel.subprocess.run")
+def test_generate_self_signed_cert_cleanup_oserror(
+    mock_run: MagicMock, _mock_find: MagicMock, _mock_remove: MagicMock
+):
+    """Test generate_self_signed_cert tolerates a failed temp-file cleanup."""
+    mock_run.return_value.returncode = 0
+    generate_self_signed_cert("/path/to/cert", "/path/to/key")
+    mock_run.assert_called_once()
+
+
+@patch("usbip_gui.ssl_tunnel.os.path.exists", return_value=True)
+@patch("usbip_gui.ssl_tunnel.sys")
+def test_find_openssl_linux(mock_sys: MagicMock, _mock_exists: MagicMock):
+    """Test find_openssl resolves the pixi/conda env executable on Linux."""
+    mock_sys.platform = "linux"
+    mock_sys.prefix = "/opt/pixi/envs/default"
+    result = find_openssl()
+    assert result == os.path.join("/opt/pixi/envs/default", "bin", "openssl")
+
+
+@patch("usbip_gui.ssl_tunnel.os.path.exists", return_value=True)
+@patch("usbip_gui.ssl_tunnel.sys")
+def test_find_openssl_windows(mock_sys: MagicMock, _mock_exists: MagicMock):
+    """Test find_openssl resolves the pixi/conda env executable on Windows."""
+    mock_sys.platform = "win32"
+    mock_sys.prefix = r"C:\pixi\envs\default"
+    result = find_openssl()
+    assert result == os.path.join(
+        r"C:\pixi\envs\default", "Library", "bin", "openssl.exe"
+    )
+
+
+@patch("usbip_gui.ssl_tunnel.os.path.exists", return_value=False)
+@patch("usbip_gui.ssl_tunnel.sys")
+def test_find_openssl_not_found(mock_sys: MagicMock, _mock_exists: MagicMock):
+    """Test find_openssl raises a helpful error when missing from the env."""
+    mock_sys.platform = "linux"
+    mock_sys.prefix = "/opt/pixi/envs/default"
+    try:
+        find_openssl()
+        assert False, "Expected FileNotFoundError"
+    except FileNotFoundError as e:
+        assert "pixi install" in str(e)
 
 
 def test_recv_exact():
@@ -63,13 +164,27 @@ def test_recv_exact():
 @patch.dict("os.environ", {}, clear=True)
 @patch("usbip_gui.ssl_tunnel.os.path.expanduser")
 @patch("usbip_gui.ssl_tunnel.os.makedirs")
-def test_get_cert_paths(mock_makedirs: MagicMock, mock_expanduser: MagicMock):
+@patch("usbip_gui.ssl_tunnel.sys")
+def test_get_cert_paths(
+    mock_sys: MagicMock,
+    mock_makedirs: MagicMock,
+    mock_expanduser: MagicMock,
+):
     """Test getting config paths."""
+    mock_sys.platform = "linux"
     mock_expanduser.return_value = "/mock/dir"
     cert, key = get_cert_paths()
-    mock_makedirs.assert_called_once_with("/mock/dir/usbip-gui", exist_ok=True)
-    assert cert == "/mock/dir/usbip-gui/server.crt"
-    assert key == "/mock/dir/usbip-gui/server.key"
+    made_path = mock_makedirs.call_args.args[0]
+    assert os.path.normpath(made_path) == os.path.normpath(
+        "/mock/dir/usbip-gui"
+    )
+    assert mock_makedirs.call_args.kwargs == {"exist_ok": True}
+    assert os.path.normpath(cert) == os.path.normpath(
+        "/mock/dir/usbip-gui/server.crt"
+    )
+    assert os.path.normpath(key) == os.path.normpath(
+        "/mock/dir/usbip-gui/server.key"
+    )
 
 
 @patch("usbip_gui.ssl_tunnel.socket.socket")
@@ -111,6 +226,23 @@ def test_client_handle_connection(
     client_handle_connection(local_sock, ("127.0.0.1", 1234), "pass", context)
     ssl_sock.connect.assert_called_once_with(("127.0.0.1", 1234))
     mock_forward.assert_called_once_with(local_sock, ssl_sock)
+
+
+@patch("usbip_gui.ssl_tunnel.socket.socket")
+def test_client_handle_connection_close_raises_oserror(
+    _mock_socket: MagicMock,
+):
+    """Test client close OSError is tolerated in cleanup."""
+    local_sock = MagicMock()
+    context = MagicMock()
+    ssl_sock = context.wrap_socket.return_value
+    ssl_sock.recv.return_value = b"\x00"
+    ssl_sock.close.side_effect = OSError("close failed")
+
+    client_handle_connection(local_sock, ("127.0.0.1", 1234), "pass", context)
+
+    ssl_sock.connect.assert_called_once_with(("127.0.0.1", 1234))
+    ssl_sock.close.assert_called_once()
 
 
 @patch("usbip_gui.ssl_tunnel.threading.Thread")
@@ -286,6 +418,35 @@ def test_client_handle_connection_oserror(
     mock_forward.assert_not_called()
 
 
+@patch("usbip_gui.ssl_tunnel.time.sleep")
+@patch("usbip_gui.ssl_tunnel.socket.socket")
+@patch("usbip_gui.ssl_tunnel.forward")
+def test_client_handle_connection_retries_winerror_10053(
+    mock_forward: MagicMock,
+    mock_socket_ctor: MagicMock,
+    _mock_sleep: MagicMock,
+):
+    """Test transient WinError 10053 is retried and then succeeds."""
+    local_sock = MagicMock()
+    context = MagicMock()
+
+    first_ssl_sock = MagicMock()
+    second_ssl_sock = MagicMock()
+
+    transient = ConnectionAbortedError("aborted")
+    transient.winerror = 10053  # type: ignore[attr-defined]
+    first_ssl_sock.connect.side_effect = transient
+    second_ssl_sock.recv.return_value = b"\x01"
+
+    context.wrap_socket.side_effect = [first_ssl_sock, second_ssl_sock]
+
+    client_handle_connection(local_sock, ("127.0.0.1", 1234), "pass", context)
+
+    assert context.wrap_socket.call_count == 2
+    mock_forward.assert_called_once_with(local_sock, second_ssl_sock)
+    mock_socket_ctor.assert_called()
+
+
 @patch("usbip_gui.ssl_tunnel.recv_exact")
 def test_server_handle_connection_close_oserror(mock_recv: MagicMock):
     """Test server handle OSError on close."""
@@ -444,8 +605,10 @@ def test_get_cert_paths_windows(
     """Test get_cert_paths on Windows with APPDATA env var."""
     mock_sys.platform = "win32"
     cert, key = get_cert_paths()
-    assert cert == os.path.join("/mock/appdata/usbip-gui", "server.crt")
-    assert key == os.path.join("/mock/appdata/usbip-gui", "server.key")
+    expected_cert = os.path.normpath("/mock/appdata/usbip-gui/server.crt")
+    expected_key = os.path.normpath("/mock/appdata/usbip-gui/server.key")
+    assert os.path.normpath(cert) == expected_cert
+    assert os.path.normpath(key) == expected_key
 
 
 @patch("usbip_gui.ssl_tunnel.sys")
