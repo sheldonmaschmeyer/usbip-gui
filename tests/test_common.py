@@ -1,5 +1,6 @@
 """Tests for the common gui components."""
 
+import json
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 from PyQt6.QtWidgets import QTreeWidget
@@ -63,26 +64,107 @@ def test_cleanup_tunnels_with_oserror():
 
 
 @patch("usbip_gui.gui.common.Path.exists")
-@patch("usbip_gui.gui.common.gettext.translation")
-def test_get_translator_common(mock_trans: MagicMock, mock_exists: MagicMock):
+@patch("builtins.open")
+@patch("usbip_gui.gui.common.json.load")
+def test_get_translator_common(
+    mock_json_load: MagicMock, _mock_open: MagicMock, mock_exists: MagicMock
+):
     """Test get_translator for common domain."""
     mock_exists.return_value = True
-    mock_trans.return_value.gettext = "mocked"
+    mock_json_load.return_value = {"hello": "bonjour"}
+
     t_func = get_translator("common")
-    assert t_func == "mocked"
-    mock_trans.assert_called_once()
+    assert callable(t_func)
+    assert t_func("hello") == "bonjour"
+    assert t_func("missing") == "missing"
 
 
 @patch("usbip_gui.gui.common.Path.exists")
-@patch("usbip_gui.gui.common.gettext.translation")
-def test_get_translator_other(mock_trans: MagicMock, mock_exists: MagicMock):
+@patch("builtins.open")
+@patch("usbip_gui.gui.common.json.load")
+def test_get_translator_other(
+    mock_json_load: MagicMock, _mock_open: MagicMock, mock_exists: MagicMock
+):
     """Test get_translator for other domains."""
-    mock_exists.return_value = False
-    mock_trans.return_value.gettext = "mocked"
+    mock_exists.return_value = True
+    # Return different dictionaries for the two json.load calls
+    mock_json_load.side_effect = [
+        {"common_key": "common_val"},
+        {"domain_key": "domain_val"},
+    ]
+
     t_func = get_translator("server")
-    assert t_func == "mocked"
-    assert mock_trans.call_count == 2
-    mock_trans.return_value.add_fallback.assert_called_once()
+    assert callable(t_func)
+    assert t_func("domain_key") == "domain_val"
+    assert t_func("common_key") == "common_val"
+    assert t_func("missing") == "missing"
+
+
+@patch("usbip_gui.gui.common.Path.exists")
+@patch("builtins.open")
+@patch("usbip_gui.gui.common.json.load")
+def test_get_translator_fallback_to_en(
+    mock_json_load: MagicMock, _mock_open: MagicMock, mock_exists: MagicMock
+):
+    """Test get_translator falling back to 'en' when lang file missing."""
+    # Side effect: first path.exists() is False (missing file),
+    #              second is True (en file exists)
+    # Called twice inside get_translator("common"):
+    # 1. common_translations -> False, True
+    # 2. domain_translations (skipped since domain="common")
+    mock_exists.side_effect = [False, True]
+    mock_json_load.return_value = {"hello": "fallback_en_val"}
+
+    t_func = get_translator("common")
+    assert callable(t_func)
+    assert t_func("hello") == "fallback_en_val"
+
+
+@patch("usbip_gui.gui.common.Path.exists")
+def test_get_translator_fallback_missing_too(mock_exists: MagicMock):
+    """Test get_translator when both requested and 'en' files are missing."""
+    mock_exists.return_value = False
+
+    t_func = get_translator("common")
+    assert callable(t_func)
+    assert t_func("hello") == "hello"
+
+
+@patch("usbip_gui.gui.common.Path.exists")
+@patch("builtins.open")
+@patch("usbip_gui.gui.common.json.load")
+def test_get_translator_json_error(
+    mock_json_load: MagicMock, _mock_open: MagicMock, mock_exists: MagicMock
+):
+    """Test get_translator handling JSONDecodeError."""
+
+    mock_exists.return_value = True
+    mock_json_load.side_effect = json.JSONDecodeError("msg", "doc", 0)
+
+    t_func = get_translator("common")
+    assert callable(t_func)
+    assert t_func("hello") == "hello"
+
+
+@patch("usbip_gui.gui.common.Locale.default")
+def test_get_translator_locale_fallback(mock_locale_default: MagicMock):
+    """Test locale language and territory fallback branches."""
+    # 1. language but no territory
+    mock_loc = MagicMock()
+    mock_loc.language = "fr"
+    mock_loc.territory = None
+    mock_locale_default.return_value = mock_loc
+    assert callable(get_translator("common"))
+
+    # 2. no locale or no language
+    mock_loc2 = MagicMock()
+    mock_loc2.language = None
+    mock_locale_default.return_value = mock_loc2
+    assert callable(get_translator("common"))
+
+    # 3. default returns None
+    mock_locale_default.return_value = None
+    assert callable(get_translator("common"))
 
 
 @patch("usbip_gui.gui.common.Path.mkdir")

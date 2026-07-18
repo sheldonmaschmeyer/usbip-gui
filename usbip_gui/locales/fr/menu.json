@@ -1,0 +1,16 @@
+{
+    "lang_toggle_tooltip": "Basculer la langue de l'interface entre l'anglais et le français",
+    "About": "À propos",
+    "File": "Fichier",
+    "Close": "Fermer",
+    "Version": "Version",
+    "Original Author": "Auteur original",
+    "Fork Maintainer": "Mainteneur du fork",
+    "USB/IP Manager": "Gestionnaire USB/IP",
+    "Powered by PyQt6 and USB/IP": "Propulsé par PyQt6 et USB/IP",
+    "View": "Affichage",
+    "Visible Tabs": "Onglets visibles",
+    "Server": "Serveur",
+    "Client": "Client",
+    "Default Tab": "Onglet par défaut"
+}

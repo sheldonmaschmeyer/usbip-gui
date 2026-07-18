@@ -2,17 +2,19 @@
 
 import subprocess
 import atexit
-from typing import Optional, Dict, Tuple, Callable, Union, List
-import gettext
-from pathlib import Path
 import json
 import os
 import sys
 import re
+from pathlib import Path
+from typing import Optional, Dict, Tuple, Callable, Union, List
+
+from babel.core import Locale
 from PyQt6.QtWidgets import QTreeWidgetItem, QTreeWidget
+
 from usbip_gui.typings import connect_signal
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 
 USBIPD_PORT = 3240
 DEFAULT_GEOMETRY = "900x842"
@@ -86,26 +88,43 @@ def save_config(config: JsonDict) -> None:
 
 
 def get_translator(domain: str) -> Callable[[str], str]:
-    """Get translator."""
-    _local_localedir = Path(__file__).parent.parent.parent / "share" / "locale"
-    localedir = (
-        str(_local_localedir)
-        if _local_localedir.exists()
-        else "/usr/local/share/locale/"
-    )
+    """Get translator loading from JSON files to avoid compiling .mo files."""
+    locales_dir = Path(__file__).parent.parent / "locales"
 
-    common_t = gettext.translation(
-        "usbip-gui-common", localedir=localedir, fallback=True
-    )
+    # Determine current language using Babel
+    lang = "en"
+    loc = Locale.default()
+    if loc and loc.language:
+        lang = loc.language
+        if loc.territory:
+            lang = f"{loc.language}_{loc.territory}"
 
-    if domain == "common":
-        return common_t.gettext
+    def load_json(name: str, language_code: str) -> Dict[str, str]:
+        base_lang = language_code.split("_")[0]
 
-    translator = gettext.translation(
-        f"usbip-gui-{domain}", localedir=localedir, fallback=True
-    )
-    translator.add_fallback(common_t)
-    return translator.gettext
+        path = locales_dir / base_lang / f"{name}.json"
+        if not path.exists():
+            path = locales_dir / "en" / f"{name}.json"
+
+        if path.exists():
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except (OSError, json.JSONDecodeError):
+                pass
+        return {}
+
+    common_translations = load_json("common", lang)
+    domain_translations = load_json(domain, lang) if domain != "common" else {}
+
+    def translate(message: str) -> str:
+        if message in domain_translations and domain_translations[message]:
+            return domain_translations[message]
+        if message in common_translations and common_translations[message]:
+            return common_translations[message]
+        return message
+
+    return translate
 
 
 t = get_translator("common")
