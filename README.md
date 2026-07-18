@@ -6,6 +6,7 @@
   - [Secure Connection (SSL Tunneling)](#secure-connection-ssl-tunneling)
     - [How it works](#how-it-works)
     - [Connecting over the Internet](#connecting-over-the-internet)
+  - [Windows Setup](#windows-setup)
   - [Host System Requirements](#host-system-requirements)
   - [Local Installation (Without Docker)](#local-installation-without-docker)
   - [Development Commands](#development-commands)
@@ -112,6 +113,20 @@ To securely share a USB device across the internet:
 5. Click **Refresh Remote** or **Attach** to seamlessly connect over the
    encrypted tunnel!
 
+## Windows Setup
+
+1. Run the installer script from PowerShell or double-click on it:
+   ```powershell
+   win_installers/install_windows.bat
+   ```
+2. (Optional) Reboot the computer.
+3. Run the app:
+   - Use the **USBIP Manager** desktop icon, from start menu, or
+   - Run from the repository directory:
+     ```powershell
+     pixi run usbip
+     ```
+
 ## Host System Requirements
 
 While Docker provides a consistent environment, `usbip` fundamentally relies on
@@ -158,8 +173,9 @@ developing or contributing, the following commands are available:
 - [x] Add SSL/SSH encryption feature.
 - [x] Move code into modules, i.e. compartmentalize sections of the gui.py.
 - [x] Migrate tkinter to Qt.
-- [ ] Optional: Windows compatibility; pixi without docker.
-- [ ] Optional: Windows installer version, fully packaged.
+- [x] Windows compatibility.
+- [x] Windows installer.
+- [ ] Fully packaged Inno Setup.
 - [x] Cross-architecture (ARM and x86) production testing.
 - [x] Look at K-Francis-H's remaining TODOs.
 

@@ -9,8 +9,11 @@ import threading
 import os
 import sys
 import re
+import shutil
 import random
 import time
+from functools import lru_cache
+from pathlib import Path
 from typing import List, Tuple
 from urllib.parse import urlparse
 
@@ -26,17 +29,103 @@ from PyQt6.QtWidgets import (
     QTreeWidget,
     QMessageBox,
 )
-from usbip_gui.gui.common import SortableTreeWidgetItem, set_min_column_widths
+from usbip_gui.common import SortableTreeWidgetItem, set_min_column_widths
 
 from usbip_gui.typings import connect_signal, set_header_labels
-from .common import (
+from usbip_gui.common import (
     get_translator,
     USBIPD_PORT,
     tunnel_state,
     get_config_dir,
+    elevate_command,
+    run_elevated,
 )
 
 t = get_translator("client")
+
+
+def _resolve_usbip_client_executable() -> str:
+    """Resolve the usbip client executable, with Windows install fallbacks."""
+    if sys.platform != "win32":
+        return "usbip"
+
+    which_match = shutil.which("usbip.exe") or shutil.which("usbip")
+    if which_match:
+        return which_match
+
+    candidate_paths: list[Path] = []
+    for env_var in ("ProgramFiles", "ProgramW6432", "ProgramFiles(x86)"):
+        base = os.environ.get(env_var)
+        if base:
+            candidate_paths.append(Path(base) / "USBip" / "usbip.exe")
+
+    # Common defaults if environment variables are missing/unusual.
+    candidate_paths.extend(
+        [
+            Path("C:/Program Files/USBip/usbip.exe"),
+            Path("C:/Program Files (x86)/USBip/usbip.exe"),
+        ]
+    )
+
+    checked_paths: list[str] = []
+    seen: set[str] = set()
+    for candidate in candidate_paths:
+        normalized = str(candidate)
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        checked_paths.append(normalized)
+        if candidate.exists():
+            return normalized
+
+    checked = "\n - ".join(checked_paths)
+    raise FileNotFoundError(
+        "usbip.exe was not found in PATH and was not found at:\n"
+        f" - {checked}"
+    )
+
+
+def _secure_port_candidates(port: int) -> List[int]:
+    """Return secure-port candidates, including Windows default fallback."""
+    if sys.platform == "win32" and port == USBIPD_PORT:
+        # Windows server mode may expose TLS on 3241 when usbipd uses 3240.
+        return [port, port + 1]
+    return [port]
+
+
+def _reset_client_tunnels_for_host(host: str) -> None:
+    """Terminate cached client tunnel processes for a given host."""
+    keys_to_reset = [
+        key for key in tunnel_state.client_processes if key[0] == host
+    ]
+    for key in keys_to_reset:
+        _local_port, proc, _password = tunnel_state.client_processes.pop(key)
+        if proc.poll() is None:
+            try:
+                proc.kill()
+            except OSError:
+                pass
+
+
+@lru_cache(maxsize=None)
+def _detect_windows_attach_bus_option(exe: str) -> str:
+    """Detect whether this Windows usbip build expects --bus-id or --busid."""
+    try:
+        probe = subprocess.run(
+            [exe, "attach", "--help"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        help_text = f"{probe.stdout}\n{probe.stderr}".lower()
+    except OSError:
+        help_text = ""
+
+    if "--bus-id" in help_text:
+        return "--bus-id"
+    if "--busid" in help_text:
+        return "--busid"
+    return "--busid"
 
 
 def device_columns() -> List[str]:
@@ -100,6 +189,7 @@ def parse_attached_list(text: str) -> List[Tuple[str, int, str, str, str]]:
 def get_or_create_client_tunnel(
     host: str, port: int, secure: bool, password: str
 ) -> Tuple[str, int]:
+    # pylint: disable=too-many-statements
     """Get or create client tunnel."""
     if not secure:
         return host, port
@@ -109,77 +199,109 @@ def get_or_create_client_tunnel(
     context.check_hostname = False
     context.verify_mode = ssl.CERT_NONE
 
-    try:
-        with socket.create_connection((host, port)) as sock:
-            with context.wrap_socket(sock, server_hostname=host) as ssock:
-                cert_der = ssock.getpeercert(binary_form=True)
+    fingerprint = ""
+    selected_secure_port: int | None = None
+    last_error: OSError | ValueError | None = None
 
-        if not cert_der:
-            raise ValueError("No certificate provided by server")
+    for candidate_port in _secure_port_candidates(port):
+        try:
+            with socket.create_connection((host, candidate_port)) as sock:
+                with context.wrap_socket(sock, server_hostname=host) as ssock:
+                    cert_der = ssock.getpeercert(binary_form=True)
 
-        fingerprint = hashlib.sha256(cert_der).hexdigest().upper()
-        it = iter(fingerprint)
-        fingerprint = ":".join(a + b for a, b in zip(it, it))
+            if not cert_der:
+                raise ValueError("No certificate provided by server")
 
-        known_hosts_path = get_config_dir() / "known_hosts.json"
-        known_hosts = {}
-        if os.path.exists(known_hosts_path):
-            with open(known_hosts_path, "r", encoding="utf-8") as f:
-                known_hosts = json.load(f)
+            fingerprint = hashlib.sha256(cert_der).hexdigest().upper()
+            it = iter(fingerprint)
+            fingerprint = ":".join(a + b for a, b in zip(it, it))
 
-        host_key = f"{host}:{port}"
-        if host_key not in known_hosts or known_hosts[host_key] != fingerprint:
-            msg = t("cert_fingerprint_msg").format(fingerprint)
-            reply = QMessageBox.question(
-                None,
-                t("Certificate Check"),
-                msg,
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            )
-            if reply == QMessageBox.StandardButton.Yes:
-                known_hosts[host_key] = fingerprint
-                os.makedirs(known_hosts_path.parent, exist_ok=True)
-                with open(known_hosts_path, "w", encoding="utf-8") as f:
-                    json.dump(known_hosts, f)
-            else:
-                return "", 0
+            known_hosts_path = get_config_dir() / "known_hosts.json"
+            known_hosts = {}
+            if os.path.exists(known_hosts_path):
+                with open(known_hosts_path, "r", encoding="utf-8") as f:
+                    known_hosts = json.load(f)
 
-        if not password:
-            QMessageBox.critical(
-                None, t("Error"), t("Password required for secure connection")
-            )
-            return "", 0
-
-        with socket.create_connection((host, port)) as sock:
-            with context.wrap_socket(sock, server_hostname=host) as ssock:
-                test_cert_der = ssock.getpeercert(binary_form=True)
-                if test_cert_der:
-                    test_fp = hashlib.sha256(test_cert_der).hexdigest().upper()
-                    it = iter(test_fp)
-                    test_fp = ":".join(a + b for a, b in zip(it, it))
-                    if test_fp != fingerprint:
-                        raise ValueError(
-                            "Fingerprint mismatch during auth check"
-                        )
-
-                pwd_bytes = password.encode("utf-8")
-                pwd_len = len(pwd_bytes)
-                ssock.sendall(pwd_len.to_bytes(4, byteorder="big") + pwd_bytes)
-
-                response = ssock.recv(1)
-                if response != b"\x01":
-                    QMessageBox.critical(
-                        None, t("Error"), t("auth_failed_msg")
-                    )
+            host_key = f"{host}:{candidate_port}"
+            if (
+                host_key not in known_hosts
+                or known_hosts[host_key] != fingerprint
+            ):
+                msg = t("cert_fingerprint_msg").format(fingerprint)
+                reply = QMessageBox.question(
+                    None,
+                    t("Certificate Check"),
+                    msg,
+                    QMessageBox.StandardButton.Yes
+                    | QMessageBox.StandardButton.No,
+                )
+                if reply == QMessageBox.StandardButton.Yes:
+                    known_hosts[host_key] = fingerprint
+                    os.makedirs(known_hosts_path.parent, exist_ok=True)
+                    with open(known_hosts_path, "w", encoding="utf-8") as f:
+                        json.dump(known_hosts, f)
+                else:
                     return "", 0
 
-    except (OSError, ValueError) as e:
-        QMessageBox.critical(
-            None, t("Error"), t(f"Failed to check certificate: {e}")
-        )
+            if not password:
+                QMessageBox.critical(
+                    None,
+                    t("Error"),
+                    t("Password required for secure connection"),
+                )
+                return "", 0
+
+            with socket.create_connection((host, candidate_port)) as sock:
+                with context.wrap_socket(sock, server_hostname=host) as ssock:
+                    test_cert_der = ssock.getpeercert(binary_form=True)
+                    if test_cert_der:
+                        test_fp = (
+                            hashlib.sha256(test_cert_der).hexdigest().upper()
+                        )
+                        it = iter(test_fp)
+                        test_fp = ":".join(a + b for a, b in zip(it, it))
+                        if test_fp != fingerprint:
+                            raise ValueError(
+                                "Fingerprint mismatch during auth check"
+                            )
+
+                    pwd_bytes = password.encode("utf-8")
+                    pwd_len = len(pwd_bytes)
+                    ssock.sendall(
+                        pwd_len.to_bytes(4, byteorder="big") + pwd_bytes
+                    )
+
+                    response = ssock.recv(1)
+                    if response != b"\x01":
+                        QMessageBox.critical(
+                            None, t("Error"), t("auth_failed_msg")
+                        )
+                        return "", 0
+
+            selected_secure_port = candidate_port
+            break
+
+        except (OSError, ValueError) as e:
+            last_error = e
+            continue
+
+    if selected_secure_port is None:
+        details = f"Failed to check certificate: {last_error}"
+        if secure and getattr(last_error, "winerror", None) == 10054:
+            details += (
+                "\n\nThe remote host closed the connection during TLS setup. "
+                "Verify that the server is running in secure mode on this "
+                "port and that client/server passwords match."
+            )
+            if sys.platform == "win32" and port == USBIPD_PORT:
+                details += (
+                    "\n\nTip: Windows secure mode may listen on port 3241 "
+                    "while usbipd stays on 3240."
+                )
+        QMessageBox.critical(None, t("Error"), t(details))
         return "", 0
 
-    key = (host, port)
+    key = (host, selected_secure_port)
     if key in tunnel_state.client_processes:
         local_port, proc, cached_password = tunnel_state.client_processes[key]
         if proc.poll() is None:
@@ -189,31 +311,36 @@ def get_or_create_client_tunnel(
             proc.kill()
 
     local_port = random.randint(40000, 50000)
+    # Long-lived child process is intentionally kept for active tunnel reuse.
+    # pylint: disable=consider-using-with
+    proc = subprocess.Popen(
+        [
+            sys.executable,
+            os.path.join(
+                os.path.dirname(os.path.dirname(__file__)), "ssl_tunnel.py"
+            ),
+            "client",
+            "--listen-port",
+            str(local_port),
+            "--remote-host",
+            host,
+            "--remote-port",
+            str(selected_secure_port),
+            "--password",
+            password,
+            "--fingerprint",
+            fingerprint,
+        ]
+    )
+    tunnel_state.client_processes[key] = (local_port, proc, password)
 
-    def run_tunnel():
-        with subprocess.Popen(
-            [
-                sys.executable,
-                os.path.join(
-                    os.path.dirname(os.path.dirname(__file__)), "ssl_tunnel.py"
-                ),
-                "client",
-                "--listen-port",
-                str(local_port),
-                "--remote-host",
-                host,
-                "--remote-port",
-                str(port),
-                "--password",
-                password,
-                "--fingerprint",
-                fingerprint,
-            ]
-        ) as proc:
-            tunnel_state.client_processes[key] = (local_port, proc, password)
-            proc.wait()
+    def watch_tunnel() -> None:
+        proc.wait()
+        current = tunnel_state.client_processes.get(key)
+        if current and current[1] is proc:
+            tunnel_state.client_processes.pop(key, None)
 
-    threading.Thread(target=run_tunnel, daemon=True).start()
+    threading.Thread(target=watch_tunnel, daemon=True).start()
 
     time.sleep(1)
     return "127.0.0.1", local_port
@@ -228,27 +355,28 @@ def list_remote_usb(
     )
     if not target_ip:
         return []
-    result = subprocess.run(
-        [
-            "sudo",
-            "usbip",
-            "--tcp-port",
-            str(target_port),
-            "list",
-            "--remote=" + target_ip,
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+
+    cmd = [
+        _resolve_usbip_client_executable(),
+        "--tcp-port",
+        str(target_port),
+        "list",
+        "--remote=" + target_ip,
+    ]
+    if sys.platform != "win32":
+        cmd = elevate_command(cmd)
+
+    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
     return parse_remote_list(result.stdout)
 
 
 def list_attached_usb() -> List[Tuple[str, int, str, str, str]]:
     """List attached usb."""
-    result = subprocess.run(
-        ["sudo", "usbip", "port"], capture_output=True, text=True, check=False
-    )
+    cmd = [_resolve_usbip_client_executable(), "port"]
+    if sys.platform != "win32":
+        cmd = elevate_command(cmd)
+
+    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
     return parse_attached_list(result.stdout)
 
 
@@ -260,6 +388,26 @@ def attach_remote_usb(
     password: str = "",
 ):
     """Attach remote usb."""
+
+    def _run_attach(
+        target_ip: str, target_port: int
+    ) -> subprocess.CompletedProcess[str]:
+        exe = _resolve_usbip_client_executable()
+        cmd = [
+            exe,
+            "--tcp-port",
+            str(target_port),
+            "attach",
+            "--remote=" + target_ip,
+        ]
+        if sys.platform == "win32":
+            bus_opt = _detect_windows_attach_bus_option(exe)
+            cmd.append(f"{bus_opt}={bus_id}")
+        else:
+            cmd.append("--busid=" + bus_id)
+
+        return run_elevated(cmd)
+
     target_ip, target_port = get_or_create_client_tunnel(
         server_ip, port, secure, password
     )
@@ -267,31 +415,53 @@ def attach_remote_usb(
         return subprocess.CompletedProcess(
             args=[], returncode=-1, stdout="", stderr=""
         )
-    result = subprocess.run(
-        [
-            "sudo",
-            "usbip",
+
+    result = _run_attach(target_ip, target_port)
+    if secure and result.returncode != 0:
+        # The secure tunnel can transiently fail on Windows after being idle.
+        _reset_client_tunnels_for_host(server_ip)
+        target_ip, target_port = get_or_create_client_tunnel(
+            server_ip, port, secure, password
+        )
+        if not target_ip:
+            return result
+        result = _run_attach(target_ip, target_port)
+
+    if sys.platform == "win32" and result.returncode != 0:
+        # UAC-elevated runs don't expose stdout/stderr. Run once without UAC
+        # to capture actionable diagnostics for the UI.
+        diag_cmd = [
+            _resolve_usbip_client_executable(),
             "--tcp-port",
             str(target_port),
             "attach",
             "--remote=" + target_ip,
             "--busid=" + bus_id,
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+        ]
+        diag = subprocess.run(
+            diag_cmd, capture_output=True, text=True, check=False
+        )
+        if (diag.stderr and diag.stderr.strip()) or (
+            diag.stdout and diag.stdout.strip()
+        ):
+            return subprocess.CompletedProcess(
+                args=result.args,
+                returncode=result.returncode,
+                stdout=diag.stdout,
+                stderr=diag.stderr or diag.stdout,
+            )
+
     return result
 
 
 def detach_remote_usb(port: int):
     """Detach remote usb."""
-    subprocess.run(
-        ["sudo", "usbip", "detach", "--port=" + str(port)],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    cmd = [
+        _resolve_usbip_client_executable(),
+        "detach",
+        "--port=" + str(port),
+    ]
+    run_elevated(cmd)
 
 
 class ClientTab(QWidget):
@@ -384,8 +554,14 @@ class ClientTab(QWidget):
         secure = self.remote_secure_checkbox.isChecked()
         password = self.remote_password_input.text()
 
-        remote_devices = list_remote_usb(server_ip, port, secure, password)
-        attached_devices = list_attached_usb()
+        try:
+            remote_devices = list_remote_usb(server_ip, port, secure, password)
+            attached_devices = list_attached_usb()
+        except OSError as e:
+            QMessageBox.critical(
+                self, t("Error"), t("usbip_client_missing_msg").format(e)
+            )
+            return
         self.remote_listbox.clear()
 
         attached_by_busid = {d[2]: d for d in attached_devices}
@@ -467,7 +643,26 @@ class ClientTab(QWidget):
         password = self.remote_password_input.text()
         bus_id = selection[0].text(2)
 
-        attach_remote_usb(server_ip, bus_id, port, secure, password)
+        result = attach_remote_usb(server_ip, bus_id, port, secure, password)
+        return_code = getattr(result, "returncode", 0)
+        if isinstance(return_code, int) and return_code != 0:
+            stderr = getattr(result, "stderr", "")
+            stdout = getattr(result, "stdout", "")
+            details = str(stderr).strip() or str(stdout).strip()
+            if not details:
+                details = f"Exit code: {return_code}"
+            if return_code == 106:
+                details += (
+                    "\n\nHint: The device may not be shared on the server "
+                    "yet, may already be attached elsewhere, or the local "
+                    "USB/IP driver/service is not ready."
+                )
+            QMessageBox.critical(
+                self,
+                t("Error"),
+                f"Failed to attach device {bus_id}:\n{details}",
+            )
+            return
         time.sleep(0.5)
         self.refresh_remote()
 

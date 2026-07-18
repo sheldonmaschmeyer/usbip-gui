@@ -9,6 +9,66 @@ import subprocess
 import hashlib
 import errno
 import sys
+import tempfile
+import time
+
+# A minimal, self-contained OpenSSL config used when generating the
+# self-signed certificate. Passed explicitly via "-config" so certificate
+# generation never depends on (and can't break because of) whatever
+# system-wide openssl.cnf happens to be installed/discovered on the host,
+# which has been observed to contain incompatible or malformed extension
+# sections (e.g. broken authorityKeyIdentifier values) on some Windows
+# OpenSSL distributions.
+_MINIMAL_OPENSSL_CONFIG = """\
+[ req ]
+distinguished_name = req_distinguished_name
+x509_extensions = v3_ca
+prompt = no
+
+[ req_distinguished_name ]
+
+[ v3_ca ]
+subjectKeyIdentifier = hash
+basicConstraints = critical,CA:true
+"""
+
+
+def _is_transient_windows_tls_abort(err: OSError) -> bool:
+    """Return True for noisy transient TLS aborts on Windows."""
+    return getattr(err, "winerror", None) in (10053, 10054)
+
+
+def find_openssl() -> str:
+    """
+    Locate the `openssl` executable bundled with the project's pixi/conda
+    environment.
+
+    The project depends on the conda-forge ``openssl`` package (see
+    pixi.toml) instead of relying on whatever OpenSSL build might (or might
+    not) be installed on the host system. Looking up the executable inside
+    ``sys.prefix`` (the active pixi environment) ensures certificate
+    generation behaves identically on Linux and Windows.
+
+    Returns:
+        str: The path to the `openssl` executable.
+
+    Raises:
+        FileNotFoundError: If `openssl` cannot be found in the current
+            Python environment.
+    """
+    if sys.platform == "win32":
+        candidate = os.path.join(sys.prefix, "Library", "bin", "openssl.exe")
+    else:
+        candidate = os.path.join(sys.prefix, "bin", "openssl")
+
+    if os.path.exists(candidate):
+        return candidate
+
+    raise FileNotFoundError(
+        f"openssl executable not found at '{candidate}'. Run "
+        "'pixi install' to install the project's dependencies, including "
+        "OpenSSL."
+    )
 
 
 def get_cert_paths() -> tuple[str, str]:
@@ -64,28 +124,56 @@ def generate_self_signed_cert(cert_path: str, key_path: str) -> None:
             be saved.
         key_path (str): The file path where the generated private key will
             be saved.
+
+    Raises:
+        OSError: If the `openssl` executable cannot be found, or if it exits
+            with a non-zero status (its stderr/stdout is included in the
+            message to aid troubleshooting).
     """
-    subprocess.run(
-        [
-            "/usr/bin/openssl",
-            "req",
-            "-x509",
-            "-newkey",
-            "rsa:4096",
-            "-nodes",
-            "-out",
-            cert_path,
-            "-keyout",
-            key_path,
-            "-days",
-            "365",
-            "-subj",
-            "/CN=usbip-gui-secure",
-        ],
-        check=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+    openssl_path = find_openssl()
+
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        suffix=".cnf",
+        delete=False,
+        encoding="utf-8",
+    ) as config_file:
+        config_file.write(_MINIMAL_OPENSSL_CONFIG)
+        config_path = config_file.name
+
+    try:
+        result = subprocess.run(
+            [
+                openssl_path,
+                "req",
+                "-x509",
+                "-newkey",
+                "rsa:4096",
+                "-nodes",
+                "-out",
+                cert_path,
+                "-keyout",
+                key_path,
+                "-days",
+                "365",
+                "-subj",
+                "/CN=usbip-gui-secure",
+                "-config",
+                config_path,
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    finally:
+        try:
+            os.remove(config_path)
+        except OSError:
+            pass
+
+    if result.returncode != 0:
+        detail = result.stderr.strip() or result.stdout.strip()
+        raise OSError(f"OpenSSL failed to generate a certificate: {detail}")
 
 
 def recv_exact(sock: socket.socket, n: int) -> bytes:
@@ -173,50 +261,76 @@ def client_handle_connection(
             with.
     """
     remote_host, remote_port = remote_addr
+
+    def is_retryable_tls_error(err: OSError) -> bool:
+        """Return True for transient connect/handshake errors to retry."""
+        winerror = getattr(err, "winerror", None)
+        if winerror in (10053, 10054, 10060):
+            return True
+        return err.errno in (errno.ECONNRESET, errno.ECONNABORTED)
+
+    max_attempts = 3
     try:
-        remote_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        ssl_remote_socket = context.wrap_socket(
-            remote_socket, server_hostname=remote_host
-        )
-        ssl_remote_socket.connect((remote_host, remote_port))
-
-        if expected_fingerprint:
-            cert_der = ssl_remote_socket.getpeercert(binary_form=True)
-            if not cert_der:
-                print(
-                    "Client connection error: "
-                    "No certificate provided by server"
+        for attempt in range(1, max_attempts + 1):
+            ssl_remote_socket = None
+            try:
+                remote_socket = socket.socket(
+                    socket.AF_INET, socket.SOCK_STREAM
                 )
+                ssl_remote_socket = context.wrap_socket(
+                    remote_socket, server_hostname=remote_host
+                )
+                ssl_remote_socket.connect((remote_host, remote_port))
+
+                if expected_fingerprint:
+                    cert_der = ssl_remote_socket.getpeercert(binary_form=True)
+                    if not cert_der:
+                        print(
+                            "Client connection error: "
+                            "No certificate provided by server"
+                        )
+                        return
+
+                    actual_fp = hashlib.sha256(cert_der).hexdigest().upper()
+                    it = iter(actual_fp)
+                    actual_fp = ":".join(a + b for a, b in zip(it, it))
+                    if actual_fp != expected_fingerprint:
+                        print(
+                            "Client connection error: Fingerprint mismatch! "
+                            f"Expected {expected_fingerprint}, got {actual_fp}"
+                        )
+                        return
+
+                pwd_bytes = password.encode("utf-8")
+                pwd_len = len(pwd_bytes)
+                ssl_remote_socket.sendall(
+                    pwd_len.to_bytes(4, byteorder="big") + pwd_bytes
+                )
+
+                auth_resp = ssl_remote_socket.recv(1)
+                if auth_resp != b"\x01":
+                    print(
+                        "Client connection error: "
+                        "Authentication failed at remote server"
+                    )
+                    return
+
+                forward(local_socket, ssl_remote_socket)
                 return
 
-            actual_fp = hashlib.sha256(cert_der).hexdigest().upper()
-            it = iter(actual_fp)
-            actual_fp = ":".join(a + b for a, b in zip(it, it))
-            if actual_fp != expected_fingerprint:
-                print(
-                    "Client connection error: Fingerprint mismatch! "
-                    f"Expected {expected_fingerprint}, got {actual_fp}"
-                )
+            except OSError as e:
+                if attempt < max_attempts and is_retryable_tls_error(e):
+                    time.sleep(0.2)
+                    continue
+                if e.errno not in (errno.EPIPE, errno.ECONNRESET):
+                    print(f"Client connection error: {e}")
                 return
-
-        pwd_bytes = password.encode("utf-8")
-        pwd_len = len(pwd_bytes)
-        ssl_remote_socket.sendall(
-            pwd_len.to_bytes(4, byteorder="big") + pwd_bytes
-        )
-
-        auth_resp = ssl_remote_socket.recv(1)
-        if auth_resp != b"\x01":
-            print(
-                "Client connection error: "
-                "Authentication failed at remote server"
-            )
-            return
-
-        forward(local_socket, ssl_remote_socket)
-    except OSError as e:
-        if e.errno not in (errno.EPIPE, errno.ECONNRESET):
-            print(f"Client connection error: {e}")
+            finally:
+                if ssl_remote_socket is not None:
+                    try:
+                        ssl_remote_socket.close()
+                    except OSError:
+                        pass
     finally:
         try:
             local_socket.close()
@@ -316,7 +430,8 @@ def start_server(
                     args=(conn, "127.0.0.1", target_port, password),
                 ).start()
             except OSError as e:
-                print(f"SSL handshake error: {e}")
+                if not _is_transient_windows_tls_abort(e):
+                    print(f"SSL handshake error: {e}")
     except (OSError, subprocess.CalledProcessError) as e:
         print(f"Server error: {e}")
 

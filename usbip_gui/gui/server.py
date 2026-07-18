@@ -5,6 +5,7 @@ import os
 import sys
 import time
 import threading
+import re
 from typing import List, Tuple
 
 from PyQt6.QtWidgets import (
@@ -20,14 +21,16 @@ from PyQt6.QtWidgets import (
 )
 
 from usbip_gui.typings import connect_signal, set_header_labels
-from .. import ssl_tunnel
-from .common import (
+from usbip_gui.common import (
     get_translator,
     USBIPD_PORT,
     tunnel_state,
     SortableTreeWidgetItem,
     set_min_column_widths,
+    elevate_command,
+    run_elevated,
 )
+from .. import ssl_tunnel
 
 t = get_translator("server")
 
@@ -49,8 +52,9 @@ def init_usbip_server(
     bind_host: str = "0.0.0.0",
 ):
     """Init usbip server."""
-    subprocess.run(["sudo", "pkill", "usbipd"], check=False)
-    subprocess.run(["pkill", "-f", "ssl_tunnel.py server"], check=False)
+    if sys.platform != "win32":
+        subprocess.run(elevate_command(["pkill", "usbipd"]), check=False)
+        subprocess.run(["pkill", "-f", "ssl_tunnel.py server"], check=False)
     if tunnel_state.server_process:
         try:
             tunnel_state.server_process.terminate()
@@ -60,11 +64,18 @@ def init_usbip_server(
         tunnel_state.server_process = None
 
     if secure:
-        target_port = port + 10000
-        subprocess.run(
-            ["sudo", "usbipd", "-D", "--tcp-port", str(target_port)],
-            check=False,
-        )
+        if sys.platform != "win32":
+            target_port = port + 10000
+            listen_port = port
+            subprocess.run(
+                elevate_command(
+                    ["usbipd", "-D", "--tcp-port", str(target_port)]
+                ),
+                check=False,
+            )
+        else:
+            target_port = 3240
+            listen_port = 3241 if port == 3240 else port
 
         def run_tunnel():
             with subprocess.Popen(
@@ -76,7 +87,7 @@ def init_usbip_server(
                     ),
                     "server",
                     "--listen-port",
-                    str(port),
+                    str(listen_port),
                     "--target-port",
                     str(target_port),
                     "--bind-host",
@@ -90,9 +101,11 @@ def init_usbip_server(
 
         threading.Thread(target=run_tunnel, daemon=True).start()
     else:
-        subprocess.run(
-            ["sudo", "usbipd", "-D", "--tcp-port", str(port)], check=False
-        )
+        if sys.platform != "win32":
+            subprocess.run(
+                elevate_command(["usbipd", "-D", "--tcp-port", str(port)]),
+                check=False,
+            )
 
 
 def parse_local_list(text: str) -> List[Tuple[str, str, str, str]]:
@@ -125,25 +138,50 @@ def parse_local_list(text: str) -> List[Tuple[str, str, str, str]]:
     return rows
 
 
+def parse_windows_local_list(text: str) -> List[Tuple[str, str, str, str]]:
+    """Parse windows local list."""
+    if not text or not text.strip():
+        return []
+
+    rows: List[Tuple[str, str, str, str]] = []
+    for line in text.strip().split("\n"):
+        match = re.match(
+            r"^(\d+-\d+(?:\.\d+)*)\s+"
+            r"([0-9a-fA-F]{4}:[0-9a-fA-F]{4})\s+"
+            r"(.+?)\s{2,}(Not shared|Shared|Attached.*)$",
+            line.strip(),
+        )
+        if match:
+            bus_id, vid_pid, device, state = match.groups()
+            gui_state = (
+                t("Bound")
+                if "Shared" in state or "Attached" in state
+                else t("Unbound")
+            )
+            rows.append((bus_id, gui_state, vid_pid, device))
+    return rows
+
+
 def list_local_usb() -> List[Tuple[str, str, str, str]]:
     """List local usb."""
-    result = subprocess.run(
-        ["sudo", "usbip", "list", "--local"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    if sys.platform == "win32":
+        result = subprocess.run(
+            ["usbipd", "list"], capture_output=True, text=True, check=False
+        )
+        return parse_windows_local_list(result.stdout)
+
+    result = run_elevated(["usbip", "list", "--local"])
     return parse_local_list(result.stdout)
 
 
 def bind_local_usb(bus_id: str):
     """Bind local usb."""
-    result = subprocess.run(
-        ["sudo", "usbip", "bind", "--busid=" + bus_id],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    if sys.platform == "win32":
+        cmd = ["usbipd", "bind", "--busid", bus_id]
+    else:
+        cmd = ["usbip", "bind", "--busid=" + bus_id]
+
+    result = run_elevated(cmd)
     print(result.stdout)
     print(result.stderr)
     return result
@@ -151,12 +189,12 @@ def bind_local_usb(bus_id: str):
 
 def unbind_local_usb(bus_id: str):
     """Unbind local usb."""
-    result = subprocess.run(
-        ["sudo", "usbip", "unbind", "--busid=" + bus_id],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    if sys.platform == "win32":
+        cmd = ["usbipd", "unbind", "--busid", bus_id]
+    else:
+        cmd = ["usbip", "unbind", "--busid=" + bus_id]
+
+    result = run_elevated(cmd)
     print(result.stdout)
     print(result.stderr)
     return result
@@ -299,7 +337,13 @@ class ServerTab(QWidget):
 
     def refresh_local(self):
         """Refresh local."""
-        local_devices = list_local_usb()
+        try:
+            local_devices = list_local_usb()
+        except OSError as e:
+            QMessageBox.critical(
+                self, t("Error"), t("usbip_client_missing_msg").format(e)
+            )
+            return
         self.local_listbox.clear()
         for device in local_devices:
             item = SortableTreeWidgetItem(

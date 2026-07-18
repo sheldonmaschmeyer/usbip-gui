@@ -13,5 +13,9 @@
     "Server": "",
     "Client": "",
     "Default Tab": "",
-    "USB/IP Project": ""
+    "USB/IP Project": "",
+    "Conda OpenSSL": "Conda OpenSSL",
+    "For Windows Platform": "For Windows Platform",
+    "Windows Server Driver": "Windows Server Driver",
+    "Windows Client Driver": "Windows Client Driver"
 }

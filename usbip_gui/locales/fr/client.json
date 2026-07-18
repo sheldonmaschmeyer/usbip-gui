@@ -12,5 +12,6 @@
     "cert_fingerprint_msg": "L'empreinte du certificat du serveur est :\n\n{}\n\nVoulez-vous accepter cette connexion ?",
     "auth_failed_msg": "Échec de l'authentification. Veuillez vérifier votre mot de passe.",
     "Attached": "Attaché",
-    "Detached": "Détaché"
+    "Detached": "Détaché",
+    "usbip_client_missing_msg": "Impossible d'exécuter l'outil client usbip : {}\n\nAssurez-vous qu'il est installé et disponible dans votre PATH."
 }

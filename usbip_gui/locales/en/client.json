@@ -10,5 +10,6 @@
     "attached_refresh_tooltip": "Refresh the list of currently attached remote USB devices",
     "attached_detach_tooltip": "Detach the selected remote USB device from this computer",
     "cert_fingerprint_msg": "The server's certificate fingerprint is:\n\n{}\n\nDo you want to accept this connection?",
-    "auth_failed_msg": "Authentication failed. Please check your password."
+    "auth_failed_msg": "Authentication failed. Please check your password.",
+    "usbip_client_missing_msg": "Could not run the usbip client tool: {}\n\nMake sure it is installed and available on your PATH."
 }

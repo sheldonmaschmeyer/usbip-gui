@@ -2,10 +2,12 @@
 
 import json
 import os
+from ctypes import wintypes
 from pathlib import Path
+from typing import Callable
 from unittest.mock import patch, MagicMock
 from PyQt6.QtWidgets import QTreeWidget
-from usbip_gui.gui.common import (
+from usbip_gui.common import (
     TunnelState,
     cleanup_tunnels,
     tunnel_state,
@@ -19,7 +21,10 @@ from usbip_gui.gui.common import (
     get_current_language,
     set_language,
     language_changed,
+    elevate_command,
+    run_elevated,
 )
+import usbip_gui.common.privilege as privilege_mod
 
 
 def test_tunnel_state_initialization():
@@ -27,6 +32,173 @@ def test_tunnel_state_initialization():
     state = TunnelState()
     assert state.server_process is None
     assert not state.client_processes
+
+
+@patch("usbip_gui.common.privilege.ctypes.WinDLL", create=True)
+def test_win_dll_wrapper(mock_windll: MagicMock):
+    """Test _win_dll delegates to ctypes.WinDLL with last-error enabled."""
+    sentinel = MagicMock()
+    mock_windll.return_value = sentinel
+    win_dll = getattr(privilege_mod, "_win_dll")
+    assert win_dll("shell32") is sentinel
+    mock_windll.assert_called_once_with("shell32", use_last_error=True)
+
+
+@patch(
+    "usbip_gui.common.privilege.ctypes.get_last_error",
+    return_value=5,
+    create=True,
+)
+def test_win_last_error_wrapper(mock_get_last_error: MagicMock):
+    """Test _win_last_error delegates to ctypes.get_last_error."""
+    win_last_error = getattr(privilege_mod, "_win_last_error")
+    assert win_last_error() == 5
+    mock_get_last_error.assert_called_once()
+
+
+def test_elevate_command_prefers_pkexec():
+    """Test elevate_command uses pkexec when it's available."""
+    with patch(
+        "usbip_gui.common.privilege.shutil.which",
+        return_value="/usr/bin/pkexec",
+    ):
+        assert elevate_command(["usbip", "port"]) == [
+            "pkexec",
+            "usbip",
+            "port",
+        ]
+
+
+def test_elevate_command_falls_back_to_sudo():
+    """Test elevate_command falls back to sudo when pkexec is missing."""
+    with patch("usbip_gui.common.privilege.shutil.which", return_value=None):
+        assert elevate_command(["usbip", "port"]) == [
+            "sudo",
+            "usbip",
+            "port",
+        ]
+
+
+@patch("usbip_gui.common.privilege.subprocess.run")
+def test_run_elevated_linux(mock_run: MagicMock):
+    """Test run_elevated uses elevate_command + subprocess.run on Linux."""
+    with patch("usbip_gui.common.privilege.sys.platform", "linux"):
+        with patch(
+            "usbip_gui.common.privilege.shutil.which",
+            return_value="/usr/bin/pkexec",
+        ):
+            run_elevated(["usbip", "port"])
+
+    mock_run.assert_called_once_with(
+        ["pkexec", "usbip", "port"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def _fake_win_dll(
+    shell32: MagicMock, kernel32: MagicMock
+) -> Callable[[str], MagicMock]:
+    """Build a `_win_dll` side_effect returning fixed per-name mocks."""
+    dlls = {"shell32": shell32, "kernel32": kernel32}
+
+    def _win_dll(name: str) -> MagicMock:
+        return dlls[name]
+
+    return _win_dll
+
+
+def _fake_get_exit_code(_handle: int, ptr: wintypes.LPDWORD) -> int:
+    """Fake `GetExitCodeProcess`, writing a success code through `ptr`."""
+    ptr.contents.value = 0
+    return 1
+
+
+def _fake_get_exit_code_106(_handle: int, ptr: wintypes.LPDWORD) -> int:
+    """Fake `GetExitCodeProcess`, writing a nonzero error code."""
+    ptr.contents.value = 106
+    return 1
+
+
+@patch("usbip_gui.common.privilege._win_dll")
+def test_run_elevated_windows(mock_win_dll: MagicMock):
+    """Test run_elevated calls ShellExecuteExW with the "runas" verb."""
+    mock_shell32 = MagicMock()
+    mock_kernel32 = MagicMock()
+    mock_win_dll.side_effect = _fake_win_dll(mock_shell32, mock_kernel32)
+    mock_shell32.ShellExecuteExW.return_value = 1
+    mock_kernel32.GetExitCodeProcess.side_effect = _fake_get_exit_code
+
+    with patch("usbip_gui.common.privilege.sys.platform", "win32"):
+        result = run_elevated(["usbipd", "bind", "--busid", "1-1"])
+
+    info = mock_shell32.ShellExecuteExW.call_args[0][0].contents
+    assert info.lpVerb == "runas"
+    assert info.lpFile == "usbipd"
+    assert info.lpParameters == "bind --busid 1-1"
+    mock_kernel32.WaitForSingleObject.assert_called_once()
+    mock_kernel32.CloseHandle.assert_called_once()
+    assert result.returncode == 0
+
+
+@patch("usbip_gui.common.privilege._win_last_error")
+@patch("usbip_gui.common.privilege._win_dll")
+def test_run_elevated_windows_cancelled(
+    mock_win_dll: MagicMock, mock_last_error: MagicMock
+):
+    """Test run_elevated surfaces a clear error if UAC is cancelled."""
+    mock_shell32 = MagicMock()
+    mock_kernel32 = MagicMock()
+    mock_win_dll.side_effect = _fake_win_dll(mock_shell32, mock_kernel32)
+    mock_shell32.ShellExecuteExW.return_value = 0
+    mock_last_error.return_value = 1223
+
+    with patch("usbip_gui.common.privilege.sys.platform", "win32"):
+        result = run_elevated(["usbipd", "bind", "--busid", "1-1"])
+
+    assert result.returncode == 1223
+    assert "cancelled" in result.stderr.lower()
+    mock_kernel32.WaitForSingleObject.assert_not_called()
+
+
+@patch("usbip_gui.common.privilege._win_last_error")
+@patch("usbip_gui.common.privilege._win_dll")
+def test_run_elevated_windows_reports_real_error(
+    mock_win_dll: MagicMock, mock_last_error: MagicMock
+):
+    """Test a genuine ShellExecuteExW failure isn't masked as "cancelled"."""
+    mock_shell32 = MagicMock()
+    mock_kernel32 = MagicMock()
+    mock_win_dll.side_effect = _fake_win_dll(mock_shell32, mock_kernel32)
+    mock_shell32.ShellExecuteExW.return_value = 0
+    mock_last_error.return_value = 2  # ERROR_FILE_NOT_FOUND
+
+    with patch("usbip_gui.common.privilege.sys.platform", "win32"):
+        result = run_elevated(["usbipd", "bind", "--busid", "1-1"])
+
+    assert result.returncode == 2
+    assert "2" in result.stderr
+    assert "cancelled" not in result.stderr.lower()
+
+
+@patch("usbip_gui.common.privilege._win_dll")
+def test_run_elevated_windows_nonzero_exit_code_message(
+    mock_win_dll: MagicMock,
+):
+    """Test nonzero elevated process exit code returns neutral stderr."""
+    mock_shell32 = MagicMock()
+    mock_kernel32 = MagicMock()
+    mock_win_dll.side_effect = _fake_win_dll(mock_shell32, mock_kernel32)
+    mock_shell32.ShellExecuteExW.return_value = 1
+    mock_kernel32.GetExitCodeProcess.side_effect = _fake_get_exit_code_106
+
+    with patch("usbip_gui.common.privilege.sys.platform", "win32"):
+        result = run_elevated(["usbip", "attach", "--busid=2-2"])
+
+    assert result.returncode == 106
+    assert "elevated process exited" in result.stderr.lower()
+    assert "106" in result.stderr
 
 
 def test_cleanup_tunnels_no_processes():
@@ -68,9 +240,9 @@ def test_cleanup_tunnels_with_oserror():
     tunnel_state.client_processes.clear()
 
 
-@patch("usbip_gui.gui.common.Path.exists")
+@patch("usbip_gui.common.languages.Path.exists")
 @patch("builtins.open")
-@patch("usbip_gui.gui.common.json.load")
+@patch("usbip_gui.common.languages.json.load")
 def test_get_translator_common(
     mock_json_load: MagicMock, _mock_open: MagicMock, mock_exists: MagicMock
 ):
@@ -84,9 +256,9 @@ def test_get_translator_common(
     assert t_func("missing") == "missing"
 
 
-@patch("usbip_gui.gui.common.Path.exists")
+@patch("usbip_gui.common.languages.Path.exists")
 @patch("builtins.open")
-@patch("usbip_gui.gui.common.json.load")
+@patch("usbip_gui.common.languages.json.load")
 def test_get_translator_other(
     mock_json_load: MagicMock, _mock_open: MagicMock, mock_exists: MagicMock
 ):
@@ -105,9 +277,9 @@ def test_get_translator_other(
     assert t_func("missing") == "missing"
 
 
-@patch("usbip_gui.gui.common.Path.exists")
+@patch("usbip_gui.common.languages.Path.exists")
 @patch("builtins.open")
-@patch("usbip_gui.gui.common.json.load")
+@patch("usbip_gui.common.languages.json.load")
 def test_get_translator_fallback_to_en(
     mock_json_load: MagicMock, _mock_open: MagicMock, mock_exists: MagicMock
 ):
@@ -125,7 +297,7 @@ def test_get_translator_fallback_to_en(
     assert t_func("hello") == "fallback_en_val"
 
 
-@patch("usbip_gui.gui.common.Path.exists")
+@patch("usbip_gui.common.languages.Path.exists")
 def test_get_translator_fallback_missing_too(mock_exists: MagicMock):
     """Test get_translator when both requested and 'en' files are missing."""
     mock_exists.return_value = False
@@ -135,9 +307,9 @@ def test_get_translator_fallback_missing_too(mock_exists: MagicMock):
     assert t_func("hello") == "hello"
 
 
-@patch("usbip_gui.gui.common.Path.exists")
+@patch("usbip_gui.common.languages.Path.exists")
 @patch("builtins.open")
-@patch("usbip_gui.gui.common.json.load")
+@patch("usbip_gui.common.languages.json.load")
 def test_get_translator_json_error(
     mock_json_load: MagicMock, _mock_open: MagicMock, mock_exists: MagicMock
 ):
@@ -151,7 +323,7 @@ def test_get_translator_json_error(
     assert t_func("hello") == "hello"
 
 
-@patch("usbip_gui.gui.common.Locale.default")
+@patch("usbip_gui.common.languages.Locale.default")
 def test_get_translator_locale_fallback(mock_locale_default: MagicMock):
     """Test locale language and territory fallback branches."""
     # 1. language but no territory
@@ -172,8 +344,8 @@ def test_get_translator_locale_fallback(mock_locale_default: MagicMock):
     assert callable(get_translator("common"))
 
 
-@patch("usbip_gui.gui.common.Path.mkdir")
-@patch("usbip_gui.gui.common.sys")
+@patch("usbip_gui.common.common.Path.mkdir")
+@patch("usbip_gui.common.common.sys")
 @patch.dict("os.environ", {"APPDATA": "/mock/appdata"})
 def test_get_config_dir_windows(mock_sys: MagicMock, _mock_mkdir: MagicMock):
     """Test get_config_dir on Windows with APPDATA env var."""
@@ -183,9 +355,9 @@ def test_get_config_dir_windows(mock_sys: MagicMock, _mock_mkdir: MagicMock):
     assert config_dir == Path("/mock/appdata/usbip-gui")
 
 
-@patch("usbip_gui.gui.common.Path.mkdir")
-@patch("usbip_gui.gui.common.sys")
-@patch("usbip_gui.gui.common.Path.home")
+@patch("usbip_gui.common.common.Path.mkdir")
+@patch("usbip_gui.common.common.sys")
+@patch("usbip_gui.common.common.Path.home")
 @patch.dict("os.environ", {}, clear=True)
 def test_get_config_dir_windows_no_appdata(
     mock_home: MagicMock, mock_sys: MagicMock, _mock_mkdir: MagicMock
@@ -198,8 +370,8 @@ def test_get_config_dir_windows_no_appdata(
     assert config_dir == Path("/mock/home/AppData/Roaming/usbip-gui")
 
 
-@patch("usbip_gui.gui.common.Path.mkdir")
-@patch("usbip_gui.gui.common.sys")
+@patch("usbip_gui.common.common.Path.mkdir")
+@patch("usbip_gui.common.common.sys")
 @patch.dict("os.environ", {"XDG_CONFIG_HOME": "/mock/xdg"})
 def test_get_config_dir_linux_xdg(mock_sys: MagicMock, _mock_mkdir: MagicMock):
     """Test get_config_dir on Linux with XDG_CONFIG_HOME."""
@@ -209,8 +381,8 @@ def test_get_config_dir_linux_xdg(mock_sys: MagicMock, _mock_mkdir: MagicMock):
     assert config_dir == Path("/mock/xdg/usbip-gui")
 
 
-@patch("usbip_gui.gui.common.open")
-@patch("usbip_gui.gui.common.get_config_path")
+@patch("usbip_gui.common.common.open")
+@patch("usbip_gui.common.common.get_config_path")
 def test_load_config_exception(mock_path: MagicMock, mock_open: MagicMock):
     """Test load_config exception handling."""
     mock_path.return_value.exists.return_value = True
@@ -218,8 +390,8 @@ def test_load_config_exception(mock_path: MagicMock, mock_open: MagicMock):
     assert load_config() == {}
 
 
-@patch("usbip_gui.gui.common.open")
-@patch("usbip_gui.gui.common.get_config_path")
+@patch("usbip_gui.common.common.open")
+@patch("usbip_gui.common.common.get_config_path")
 def test_save_config_exception(_mock_path: MagicMock, mock_open: MagicMock):
     """Test save_config exception handling."""
     mock_open.side_effect = Exception("test")
@@ -276,7 +448,7 @@ def test_sortable_tree_widget_item_no_tree():
     assert item1 < item2
 
 
-@patch("usbip_gui.gui.common.re.split")
+@patch("usbip_gui.common.common.re.split")
 def test_sortable_tree_widget_item_type_error(mock_split: MagicMock):
     """Test SortableTreeWidgetItem fallback on TypeError."""
     tree = QTreeWidget()
@@ -291,7 +463,7 @@ def test_sortable_tree_widget_item_type_error(mock_split: MagicMock):
     assert item1 < item2
 
 
-@patch("usbip_gui.gui.common.Locale.default")
+@patch("usbip_gui.common.languages.Locale.default")
 def test_detect_system_language(mock_locale_default: MagicMock):
     """Test _detect_system_language with and without a territory."""
     mock_loc = MagicMock()
@@ -307,15 +479,15 @@ def test_detect_system_language(mock_locale_default: MagicMock):
     assert _detect_system_language() == "en"
 
 
-@patch("usbip_gui.gui.common.Locale.default")
+@patch("usbip_gui.common.languages.Locale.default")
 def test_detect_system_language_exception(mock_locale_default: MagicMock):
     """Test _detect_system_language falls back to 'en' on exception."""
     mock_locale_default.side_effect = TypeError("boom")
     assert _detect_system_language() == "en"
 
 
-@patch("usbip_gui.gui.common.save_config")
-@patch("usbip_gui.gui.common.load_config")
+@patch("usbip_gui.common.languages.save_config")
+@patch("usbip_gui.common.languages.load_config")
 def test_get_current_language_from_config(
     mock_load_config: MagicMock, _mock_save_config: MagicMock
 ):
@@ -330,8 +502,8 @@ def test_get_current_language_from_config(
     language_changed.current = None
 
 
-@patch("usbip_gui.gui.common._detect_system_language")
-@patch("usbip_gui.gui.common.load_config")
+@patch("usbip_gui.common.languages._detect_system_language")
+@patch("usbip_gui.common.languages.load_config")
 def test_get_current_language_detects_system(
     mock_load_config: MagicMock, mock_detect: MagicMock
 ):
@@ -344,8 +516,8 @@ def test_get_current_language_detects_system(
     language_changed.current = None
 
 
-@patch("usbip_gui.gui.common.save_config")
-@patch("usbip_gui.gui.common.load_config")
+@patch("usbip_gui.common.languages.save_config")
+@patch("usbip_gui.common.languages.load_config")
 def test_set_language(
     mock_load_config: MagicMock, mock_save_config: MagicMock
 ):

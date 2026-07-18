@@ -10,5 +10,6 @@
     "local_refresh_tooltip": "Actualiser la liste des périphériques USB locaux",
     "local_bind_tooltip": "Associer le périphérique USB local sélectionné pour le partager",
     "local_unbind_tooltip": "Dissocier le périphérique USB local sélectionné pour ne plus le partager",
-    "cert_regen": "Certificat régénéré avec succès. Veuillez redémarrer le serveur."
+    "cert_regen": "Certificat régénéré avec succès. Veuillez redémarrer le serveur.",
+    "usbip_client_missing_msg": "Impossible d'exécuter l'outil usbip/usbipd : {}\n\nAssurez-vous qu'il est installé et disponible dans votre PATH."
 }

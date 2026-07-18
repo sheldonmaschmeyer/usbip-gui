@@ -1,6 +1,6 @@
 """Language switching utilities."""
 
-from ..common import get_translator, get_current_language, set_language
+from usbip_gui.common import get_translator, get_current_language, set_language
 
 t = get_translator("menu")
 

@@ -9,6 +9,7 @@ from usbip_gui.gui.server import (
     list_local_usb,
     bind_local_usb,
     unbind_local_usb,
+    parse_windows_local_list,
 )
 
 
@@ -31,24 +32,35 @@ def test_parse_local_list():
 
 @patch("usbip_gui.gui.server.subprocess.run")
 @patch("usbip_gui.gui.server.tunnel_state")
-def test_init_usbip_server(mock_tunnel_state: MagicMock, mock_run: MagicMock):
+@patch("usbip_gui.gui.server.sys")
+def test_init_usbip_server(
+    mock_sys: MagicMock,
+    mock_tunnel_state: MagicMock,
+    mock_run: MagicMock,
+):
     """Test init_usbip_server function."""
+    mock_sys.platform = "linux"
     mock_tunnel_state.server_process = MagicMock()
     init_usbip_server(port=3240, secure=False)
     assert mock_run.call_count == 3
-    mock_run.assert_any_call(["sudo", "pkill", "usbipd"], check=False)
+    mock_run.assert_any_call(["pkexec", "pkill", "usbipd"], check=False)
     mock_run.assert_called_with(
-        ["sudo", "usbipd", "-D", "--tcp-port", "3240"], check=False
+        ["pkexec", "usbipd", "-D", "--tcp-port", "3240"], check=False
     )
 
 
 @patch("usbip_gui.gui.server.subprocess.run")
 @patch("usbip_gui.gui.server.threading.Thread")
 @patch("usbip_gui.gui.server.tunnel_state")
+@patch("usbip_gui.gui.server.sys")
 def test_init_usbip_server_secure(
-    mock_tunnel_state: MagicMock, mock_thread: MagicMock, mock_run: MagicMock
+    mock_sys: MagicMock,
+    mock_tunnel_state: MagicMock,
+    mock_thread: MagicMock,
+    mock_run: MagicMock,
 ):
     """Test init_usbip_server secure function."""
+    mock_sys.platform = "linux"
     mock_tunnel_state.server_process = None
     init_usbip_server(port=3240, secure=True, password="test")
     assert mock_run.call_count == 3
@@ -56,32 +68,30 @@ def test_init_usbip_server_secure(
     mock_thread.return_value.start.assert_called_once()
 
 
-@patch("usbip_gui.gui.server.subprocess.run")
-def test_list_local_usb(mock_run: MagicMock):
+@patch("usbip_gui.gui.server.run_elevated")
+@patch("usbip_gui.gui.server.sys")
+def test_list_local_usb(mock_sys: MagicMock, mock_run_elevated: MagicMock):
     """Test listing local usb."""
-    mock_run.return_value.stdout = "- busid 1-1 (0000:0000)\nMan:Desc\n\n"
+    mock_sys.platform = "linux"
+    mock_run_elevated.return_value.stdout = (
+        "- busid 1-1 (0000:0000)\nMan:Desc\n\n"
+    )
     res = list_local_usb()
     assert len(res) == 1
-    mock_run.assert_called_once()
+    mock_run_elevated.assert_called_once_with(["usbip", "list", "--local"])
 
 
-@patch("usbip_gui.gui.server.subprocess.run")
-def test_bind_unbind_local_usb(mock_run: MagicMock):
+@patch("usbip_gui.gui.server.run_elevated")
+@patch("usbip_gui.gui.server.sys")
+def test_bind_unbind_local_usb(
+    mock_sys: MagicMock, mock_run_elevated: MagicMock
+):
     """Test binding and unbinding."""
+    mock_sys.platform = "linux"
     bind_local_usb("1-1")
-    mock_run.assert_called_with(
-        ["sudo", "usbip", "bind", "--busid=1-1"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    mock_run_elevated.assert_called_with(["usbip", "bind", "--busid=1-1"])
     unbind_local_usb("1-1")
-    mock_run.assert_called_with(
-        ["sudo", "usbip", "unbind", "--busid=1-1"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    mock_run_elevated.assert_called_with(["usbip", "unbind", "--busid=1-1"])
 
 
 @patch("usbip_gui.gui.server.QMessageBox.warning")
@@ -151,6 +161,21 @@ def test_refresh_local(mock_list: MagicMock, mock_item: MagicMock):
     mock_item.assert_called_once_with(
         tab.local_listbox, ["1-1", "Bound", "Man", "Desc"]
     )
+
+
+@patch("usbip_gui.gui.server.QMessageBox.critical")
+@patch("usbip_gui.gui.server.list_local_usb")
+def test_refresh_local_usbip_not_found(
+    mock_list: MagicMock, mock_critical: MagicMock
+):
+    """Test refresh local shows a clear error if usbipd isn't installed."""
+    mock_list.side_effect = FileNotFoundError(
+        "[WinError 2] The system cannot find the file specified"
+    )
+    tab = MagicMock()
+    ServerTab.refresh_local(tab)
+    mock_critical.assert_called_once()
+    tab.local_listbox.clear.assert_not_called()
 
 
 @patch("usbip_gui.gui.server.time.sleep")
@@ -295,8 +320,11 @@ def test_server_ui_errors(mock_local: MagicMock):
             mock_err.assert_not_called()
 
 
+@patch("usbip_gui.gui.server.list_local_usb", return_value=[])
 @patch("usbip_gui.gui.server.ssl_tunnel.get_cert_paths", side_effect=OSError)
-def test_show_fingerprint_oserror(_mock_get: MagicMock):
+def test_show_fingerprint_oserror(
+    _mock_get: MagicMock, _mock_local: MagicMock
+):
     """Test show fingerprint handles oserror."""
 
     server_tab = ServerTab(None)
@@ -305,11 +333,88 @@ def test_show_fingerprint_oserror(_mock_get: MagicMock):
         mock_err.assert_called_once()
 
 
+@patch("usbip_gui.gui.server.list_local_usb", return_value=[])
 @patch("usbip_gui.gui.server.ssl_tunnel.get_cert_paths", side_effect=OSError)
-def test_regenerate_cert_oserror(_mock_get: MagicMock):
+def test_regenerate_cert_oserror(_mock_get: MagicMock, _mock_local: MagicMock):
     """Test regenerate cert handles oserror."""
 
     server_tab = ServerTab(None)
     with patch("usbip_gui.gui.server.QMessageBox.critical") as mock_err:
         server_tab.regenerate_cert()
         mock_err.assert_called_once()
+
+
+def test_parse_windows_local_list():
+    """Test parse windows local list."""
+    assert not parse_windows_local_list("")
+    assert not parse_windows_local_list(" \n ")
+
+    text = (
+        "1-1      046d:c52b  Manufacturer Desc  Not shared\n"
+        "1-2      1234:5678  Another Device     Shared\n"
+        "1-3      8765:4321  Attached Device    Attached to something"
+    )
+
+    rows = parse_windows_local_list(text)
+    assert len(rows) == 3
+    assert rows[0][0] == "1-1"
+    assert rows[0][1] == "Unbound"
+    assert rows[0][2] == "046d:c52b"
+    assert rows[1][1] == "Bound"
+    assert rows[2][1] == "Bound"
+
+
+@patch("usbip_gui.gui.server.sys")
+@patch("usbip_gui.gui.server.subprocess.run")
+@patch("usbip_gui.gui.server.tunnel_state")
+def test_init_usbip_server_win32(
+    mock_tunnel: MagicMock, mock_run: MagicMock, mock_sys: MagicMock
+):
+    """Test init_usbip_server on win32."""
+    mock_sys.platform = "win32"
+    mock_sys.executable = "python.exe"
+    mock_tunnel.server_process = None
+
+    # Insecure
+    init_usbip_server(port=3240, secure=False)
+    # Shouldn't call run because win32 insecure doesn't start usbipd -D
+    mock_run.assert_not_called()
+
+    # Secure
+    with patch("usbip_gui.gui.server.threading.Thread") as mock_thread:
+        init_usbip_server(port=3240, secure=True)
+        mock_thread.assert_called_once()
+        target = mock_thread.call_args[1]["target"]
+        with patch("usbip_gui.gui.server.subprocess.Popen") as mock_popen:
+            target()
+            mock_popen.assert_called_once()
+
+
+@patch("usbip_gui.gui.server.sys")
+@patch("usbip_gui.gui.server.subprocess.run")
+def test_list_local_usb_win32(mock_run: MagicMock, mock_sys: MagicMock):
+    """Test list_local_usb on win32."""
+    mock_sys.platform = "win32"
+    mock_run.return_value.stdout = "1-1      0000:0000  dev      Not shared"
+    res = list_local_usb()
+    mock_run.assert_called_once_with(
+        ["usbipd", "list"], capture_output=True, text=True, check=False
+    )
+    assert len(res) == 1
+
+
+@patch("usbip_gui.gui.server.sys")
+@patch("usbip_gui.gui.server.run_elevated")
+def test_bind_unbind_local_usb_win32(
+    mock_run_elevated: MagicMock, mock_sys: MagicMock
+):
+    """Test bind/unbind local usb on win32 triggers UAC via run_elevated."""
+    mock_sys.platform = "win32"
+
+    bind_local_usb("1-1")
+    mock_run_elevated.assert_called_with(["usbipd", "bind", "--busid", "1-1"])
+
+    unbind_local_usb("1-1")
+    mock_run_elevated.assert_called_with(
+        ["usbipd", "unbind", "--busid", "1-1"]
+    )

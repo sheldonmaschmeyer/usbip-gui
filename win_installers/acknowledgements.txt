@@ -1,0 +1,8 @@
+USB/IP Manager is built upon and relies on the excellent work of several open-source projects. We highly recommend checking out the documentation and READMEs for the following foundational tools:
+
+- Pixi (Package Manager): https://pixi.sh/
+- PyQt6 (Qt Framework): https://riverbankcomputing.com/software/pyqt/
+- Conda OpenSSL: https://anaconda.org/channels/conda-forge/packages/openssl/overview
+- dorssel/usbipd-win (Windows Server Driver): https://github.com/dorssel/usbipd-win
+- vadimgrn/usbip-win2 (Windows Client Driver): https://github.com/vadimgrn/usbip-win2
+- Original Linux USB/IP Project: https://usbip.sourceforge.net/

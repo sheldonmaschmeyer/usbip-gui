@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 from PyQt6.QtCore import Qt
-from ..common import VERSION, get_translator
+from usbip_gui.common import VERSION, get_translator
 from ...typings import connect_signal
 
 t = get_translator("menu")
@@ -20,11 +20,18 @@ def show_about_dialog(parent: QWidget | None = None):
         f"{t('Version')} {VERSION}\n\n"
         f"{t('Original Author')}: K-Francis-H\n"
         f"{t('Fork Maintainer')}: Sheldon Maschmeyer\n\n"
-        f"{t('Powered by PyQt6 and USB/IP')}\n"
+        f"{t('Powered by PyQt6 and USB/IP')}:\n"
         f"PyQt6: https://doc.qt.io/qtforpython-6/licenses.html\n"
         f"USB/IP: https://github.com/torvalds/linux/blob/master/"
         f"tools/usb/usbip/README\n"
-        f"{t('USB/IP Project')}: https://usbip.sourceforge.net/\n\n"
+        f"{t('USB/IP Project')}: https://usbip.sourceforge.net/\n"
+        f"{t('Conda OpenSSL')}: https://anaconda.org/channels/conda-forge/"
+        f"packages/openssl/overview\n\n"
+        f"{t('For Windows Platform')}:\n"
+        f"dorssel/usbipd-win ({t('Windows Server Driver')}): "
+        f"https://github.com/dorssel/usbipd-win\n"
+        f"vadimgrn/usbip-win2 ({t('Windows Client Driver')}): "
+        f"https://github.com/vadimgrn/usbip-win2\n\n"
         f"GitHub: https://github.com/sheldonmaschmeyer/usbip-gui\n\n"
     )
 
