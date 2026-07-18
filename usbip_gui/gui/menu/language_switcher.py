@@ -1,15 +1,17 @@
-"""Language switching utilities and environment management."""
+"""Language switching utilities."""
 
-import os
-import sys
-from ..common import get_translator
+from ..common import get_translator, get_current_language, set_language
 
 t = get_translator("menu")
 
 
-def toggle_language():
-    """Toggle language."""
-    current_lang = os.environ.get("LANGUAGE", "en")
+def toggle_language() -> None:
+    """Toggle the active language between English and French, in place.
+
+    This updates the shared language state and emits `language_changed`, so
+    the running UI can refresh its text immediately without closing and
+    reopening the application.
+    """
+    current_lang = get_current_language()
     new_lang = "fr_CA" if current_lang != "fr_CA" else "en"
-    os.environ["LANGUAGE"] = new_lang
-    os.execv(sys.executable, [sys.executable] + sys.argv)
+    set_language(new_lang)

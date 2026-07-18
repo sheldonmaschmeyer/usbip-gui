@@ -31,12 +31,15 @@ from .common import (
 
 t = get_translator("server")
 
-LOCAL_DEVICE_COLUMNS = [
-    t("Bus ID"),
-    t("State"),
-    t("Manufacturer"),
-    t("Description"),
-]
+
+def local_device_columns() -> List[str]:
+    """Column headers for the local device tree, for the active language."""
+    return [
+        t("Bus ID"),
+        t("State"),
+        t("Manufacturer"),
+        t("Description"),
+    ]
 
 
 def init_usbip_server(
@@ -249,7 +252,7 @@ class ServerTab(QWidget):
 
         # List
         self.local_listbox = QTreeWidget()
-        set_header_labels(self.local_listbox, LOCAL_DEVICE_COLUMNS)
+        set_header_labels(self.local_listbox, local_device_columns())
         self.local_listbox.setSortingEnabled(True)
         connect_signal(
             self.local_listbox.itemDoubleClicked, self.on_double_click
@@ -263,6 +266,7 @@ class ServerTab(QWidget):
         layout.addLayout(self.local_control_layout1)
         layout.addLayout(self.local_actions_layout)
         layout.addWidget(self.local_listbox)
+        self._last_local_devices: List[Tuple[str, str, str, str]] = []
 
         self.refresh_local()
 
@@ -303,7 +307,7 @@ class ServerTab(QWidget):
             )
             self.local_listbox.addTopLevelItem(item)
 
-        for i in range(len(LOCAL_DEVICE_COLUMNS)):
+        for i in range(len(local_device_columns())):
             self.local_listbox.resizeColumnToContents(i)
 
     def restart_server(self):

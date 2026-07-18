@@ -1,6 +1,7 @@
 """Tests for the common gui components."""
 
 import json
+import os
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 from PyQt6.QtWidgets import QTreeWidget
@@ -14,6 +15,10 @@ from usbip_gui.gui.common import (
     save_config,
     SortableTreeWidgetItem,
     set_min_column_widths,
+    _detect_system_language,  # pyright: ignore[reportPrivateUsage]
+    get_current_language,
+    set_language,
+    language_changed,
 )
 
 
@@ -284,3 +289,79 @@ def test_sortable_tree_widget_item_type_error(mock_split: MagicMock):
     # It will fallback to super().__lt__,
     # which uses standard string comparison ("1-10" < "1-3") -> True
     assert item1 < item2
+
+
+@patch("usbip_gui.gui.common.Locale.default")
+def test_detect_system_language(mock_locale_default: MagicMock):
+    """Test _detect_system_language with and without a territory."""
+    mock_loc = MagicMock()
+    mock_loc.language = "fr"
+    mock_loc.territory = "CA"
+    mock_locale_default.return_value = mock_loc
+    assert _detect_system_language() == "fr_CA"
+
+    mock_loc.territory = None
+    assert _detect_system_language() == "fr"
+
+    mock_locale_default.return_value = None
+    assert _detect_system_language() == "en"
+
+
+@patch("usbip_gui.gui.common.Locale.default")
+def test_detect_system_language_exception(mock_locale_default: MagicMock):
+    """Test _detect_system_language falls back to 'en' on exception."""
+    mock_locale_default.side_effect = TypeError("boom")
+    assert _detect_system_language() == "en"
+
+
+@patch("usbip_gui.gui.common.save_config")
+@patch("usbip_gui.gui.common.load_config")
+def test_get_current_language_from_config(
+    mock_load_config: MagicMock, _mock_save_config: MagicMock
+):
+    """Test get_current_language resolves and caches the saved language."""
+    language_changed.current = None
+    mock_load_config.return_value = {"language": "fr_CA"}
+    assert get_current_language() == "fr_CA"
+    # Cached on the shared state, so a second call skips load_config.
+    mock_load_config.reset_mock()
+    assert get_current_language() == "fr_CA"
+    mock_load_config.assert_not_called()
+    language_changed.current = None
+
+
+@patch("usbip_gui.gui.common._detect_system_language")
+@patch("usbip_gui.gui.common.load_config")
+def test_get_current_language_detects_system(
+    mock_load_config: MagicMock, mock_detect: MagicMock
+):
+    """Test get_current_language falls back to system detection."""
+    language_changed.current = None
+    mock_load_config.return_value = {}
+    mock_detect.return_value = "en"
+    assert get_current_language() == "en"
+    mock_detect.assert_called_once()
+    language_changed.current = None
+
+
+@patch("usbip_gui.gui.common.save_config")
+@patch("usbip_gui.gui.common.load_config")
+def test_set_language(
+    mock_load_config: MagicMock, mock_save_config: MagicMock
+):
+    """Test set_language updates state, env, config, and emits the signal."""
+    mock_load_config.return_value = {}
+    received: list[str] = []
+    language_changed.changed.connect(received.append)  # pyright: ignore
+
+    try:
+        set_language("fr_CA")
+
+        assert language_changed.current == "fr_CA"
+        assert os.environ["LANGUAGE"] == "fr_CA"
+        mock_save_config.assert_called_once_with({"language": "fr_CA"})
+        assert received == ["fr_CA"]
+    finally:
+        language_changed.changed.disconnect(received.append)  # pyright: ignore
+        language_changed.current = None
+        os.environ.pop("LANGUAGE", None)

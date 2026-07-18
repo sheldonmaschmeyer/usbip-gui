@@ -38,14 +38,17 @@ from .common import (
 
 t = get_translator("client")
 
-DEVICE_COLUMNS = [
-    t("Host"),
-    t("Port"),
-    t("Bus ID"),
-    t("State"),
-    t("Manufacturer"),
-    t("Description"),
-]
+
+def device_columns() -> List[str]:
+    """Column headers for the remote device tree, for the active language."""
+    return [
+        t("Host"),
+        t("Port"),
+        t("Bus ID"),
+        t("State"),
+        t("Manufacturer"),
+        t("Description"),
+    ]
 
 
 def parse_remote_list(text: str) -> List[Tuple[str, str, str]]:
@@ -349,7 +352,7 @@ class ClientTab(QWidget):
 
         # Remote List
         self.remote_listbox = QTreeWidget()
-        set_header_labels(self.remote_listbox, DEVICE_COLUMNS)
+        set_header_labels(self.remote_listbox, device_columns())
         self.remote_listbox.setSortingEnabled(True)
         connect_signal(
             self.remote_listbox.itemDoubleClicked, self.on_double_click_remote
@@ -436,7 +439,7 @@ class ClientTab(QWidget):
             item.setData(0, Qt.ItemDataRole.UserRole, att_port)
             self.remote_listbox.addTopLevelItem(item)
 
-        for i in range(len(DEVICE_COLUMNS)):
+        for i in range(len(device_columns())):
             self.remote_listbox.resizeColumnToContents(i)
 
     def attach_remote(self):

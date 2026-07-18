@@ -68,16 +68,25 @@ def test_show_about_with_parent(
     mock_qdialog.return_value.exec.assert_called_once()
 
 
-@patch("usbip_gui.gui.menu.language_switcher.os.execv")
-@patch("usbip_gui.gui.menu.language_switcher.os.environ")
-@patch("usbip_gui.gui.menu.language_switcher.sys")
+@patch("usbip_gui.gui.menu.language_switcher.set_language")
+@patch("usbip_gui.gui.menu.language_switcher.get_current_language")
 def test_toggle_language(
-    mock_sys: MagicMock, mock_env: MagicMock, mock_execv: MagicMock
+    mock_get_current_language: MagicMock, mock_set_language: MagicMock
 ):
-    """Test toggling the language environment variables."""
-    mock_sys.executable = "python"
-    mock_sys.argv = ["main.py"]
-    mock_env.get.return_value = "en"
+    """Test toggling the language."""
+    mock_get_current_language.return_value = "en"
 
     toggle_language()
-    mock_execv.assert_called_once_with("python", ["python", "main.py"])
+    mock_set_language.assert_called_once_with("fr_CA")
+
+
+@patch("usbip_gui.gui.menu.language_switcher.set_language")
+@patch("usbip_gui.gui.menu.language_switcher.get_current_language")
+def test_toggle_language_back_to_english(
+    mock_get_current_language: MagicMock, mock_set_language: MagicMock
+):
+    """Test toggling the language back to English from French."""
+    mock_get_current_language.return_value = "fr_CA"
+
+    toggle_language()
+    mock_set_language.assert_called_once_with("en")

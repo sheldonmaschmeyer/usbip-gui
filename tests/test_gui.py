@@ -130,6 +130,31 @@ def test_gui_update_tabs_and_defaults(
 @patch("usbip_gui.gui.gui.ServerTab")
 @patch("usbip_gui.gui.gui.ClientTab")
 @patch("usbip_gui.gui.gui.create_main_menu")
+def test_on_language_changed_rebuilds_ui(
+    _mock_menu: MagicMock,
+    _mock_client: MagicMock,
+    _mock_server: MagicMock,
+    mock_notebook_class: MagicMock,
+):
+    """Test that a language change event rebuilds the UI in place."""
+    mock_notebook = mock_notebook_class.return_value
+    mock_notebook.currentIndex.return_value = 0
+    mock_notebook.indexOf.return_value = 0
+    mock_root = MagicMock()
+    gui = UsbIpGui(mock_root)
+
+    with patch.object(gui, "build_ui") as mock_build_ui:
+        # pylint: disable-next=protected-access
+        gui._on_language_changed(  # pyright: ignore[reportPrivateUsage]
+            "fr_CA"
+        )
+        mock_build_ui.assert_called_once()
+
+
+@patch("usbip_gui.gui.gui.QTabWidget")
+@patch("usbip_gui.gui.gui.ServerTab")
+@patch("usbip_gui.gui.gui.ClientTab")
+@patch("usbip_gui.gui.gui.create_main_menu")
 def test_save_settings_logic(
     _menu: MagicMock, _client: MagicMock, _server: MagicMock, _tab: MagicMock
 ):
