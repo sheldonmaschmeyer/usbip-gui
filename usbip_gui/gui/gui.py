@@ -3,9 +3,12 @@
 import os
 import subprocess
 import sys
+from pathlib import Path
 
-from PyQt6.QtWidgets import QApplication, QMainWindow, QTabWidget
-from PyQt6.QtGui import QAction
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QApplication, QMainWindow, QTabWidget, QLabel
+from PyQt6.QtGui import QAction, QIcon, QPixmap
+
 
 from .common import DEFAULT_GEOMETRY, get_translator, load_config, save_config
 from .server import ServerTab
@@ -31,6 +34,10 @@ class UsbIpGui:
     def __init__(self, root: QMainWindow):
         """Initialize the class instance."""
         self.root = root
+        root_path = Path(__file__).resolve().parent.parent.parent
+        icon_path = root_path / "icon" / "usbip-logo.ico"
+        logo_path = root_path / "icon" / "usbip-logo.png"
+        self.root.setWindowIcon(QIcon(str(icon_path)))
         self.root.setWindowTitle(t("USB/IP Manager"))
 
         self.server_visible_action = None
@@ -44,6 +51,17 @@ class UsbIpGui:
 
         self.notebook = QTabWidget(self.root)
         self.root.setCentralWidget(self.notebook)
+
+        logo_label = QLabel()
+        pixmap = QPixmap(str(logo_path))
+        if not pixmap.isNull():
+            logo_label.setPixmap(
+                pixmap.scaledToHeight(
+                    24, Qt.TransformationMode.SmoothTransformation
+                )
+            )
+            logo_label.setContentsMargins(0, 0, 10, 15)
+            self.notebook.setCornerWidget(logo_label, Qt.Corner.TopRightCorner)
 
         self.server_tab = ServerTab()
         self.client_tab = ClientTab()
@@ -123,6 +141,12 @@ class UsbIpGui:
 def start_app():
     """Start app."""
     app = QApplication(sys.argv)
+    icon_path = (
+        Path(__file__).resolve().parent.parent.parent
+        / "icon"
+        / "usbip-logo.ico"
+    )
+    app.setWindowIcon(QIcon(str(icon_path)))
 
     script_path = os.path.join(
         os.path.dirname(
