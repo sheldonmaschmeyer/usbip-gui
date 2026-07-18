@@ -1,0 +1,16 @@
+{
+    "no selection to attach": "aucune sélection à attacher",
+    "no selection to detach": "aucune sélection à détacher",
+    "Remote USB Devices for ": "Périphériques USB distants pour ",
+    "Attach Device": "Attacher le périphérique",
+    "Attached Devices": "Périphériques attachés",
+    "Detach Device": "Détacher le périphérique",
+    "remote_refresh_tooltip": "Actualiser la liste des périphériques USB distants",
+    "remote_attach_tooltip": "Attacher le périphérique USB distant sélectionné à cet ordinateur",
+    "attached_refresh_tooltip": "Actualiser la liste des périphériques USB distants actuellement attachés",
+    "attached_detach_tooltip": "Détacher le périphérique USB distant sélectionné de cet ordinateur",
+    "cert_fingerprint_msg": "L'empreinte du certificat du serveur est :\n\n{}\n\nVoulez-vous accepter cette connexion ?",
+    "auth_failed_msg": "Échec de l'authentification. Veuillez vérifier votre mot de passe.",
+    "Attached": "Attaché",
+    "Detached": "Détaché"
+}

@@ -1,0 +1,14 @@
+{
+    "no selection to attach": "",
+    "no selection to detach": "",
+    "Remote USB Devices for ": "",
+    "Attach Device": "",
+    "Attached Devices": "",
+    "Detach Device": "",
+    "remote_refresh_tooltip": "Refresh the list of remote USB devices",
+    "remote_attach_tooltip": "Attach the selected remote USB device to this computer",
+    "attached_refresh_tooltip": "Refresh the list of currently attached remote USB devices",
+    "attached_detach_tooltip": "Detach the selected remote USB device from this computer",
+    "cert_fingerprint_msg": "The server's certificate fingerprint is:\n\n{}\n\nDo you want to accept this connection?",
+    "auth_failed_msg": "Authentication failed. Please check your password."
+}

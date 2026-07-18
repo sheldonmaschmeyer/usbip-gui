@@ -1,0 +1,14 @@
+{
+    "no selection to bind": "aucune sélection à associer",
+    " bound successfully": " associé avec succès",
+    "no selection to unbind": "aucune sélection à dissocier",
+    " unbound succesfully": " dissocié avec succès",
+    "Local USB Devices": "Périphériques USB locaux",
+    "Bind Device": "Associer le périphérique",
+    "Unbind Device": "Dissocier le périphérique",
+    "local_restart_tooltip": "Appliquer le port sélectionné et redémarrer le serveur USB/IP local",
+    "local_refresh_tooltip": "Actualiser la liste des périphériques USB locaux",
+    "local_bind_tooltip": "Associer le périphérique USB local sélectionné pour le partager",
+    "local_unbind_tooltip": "Dissocier le périphérique USB local sélectionné pour ne plus le partager",
+    "cert_regen": "Certificat régénéré avec succès. Veuillez redémarrer le serveur."
+}

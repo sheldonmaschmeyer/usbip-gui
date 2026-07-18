@@ -3,9 +3,6 @@ project('usbip-gui')
 python = import('python').find_installation('python', modules: ['tkinter'])
 python.dependency()
 
-
-subdir('po')
-
 sources = ['./usbip-gui/__init__.py', './usbip-gui/__main__.py', './usbip-gui/main.py', './usbip-gui/gui.py']
 
 # launch_data = configuration_data({

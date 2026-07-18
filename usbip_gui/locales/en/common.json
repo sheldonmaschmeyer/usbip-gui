@@ -1,0 +1,15 @@
+{
+    "Bus ID": "",
+    "Manufacturer": "",
+    "Description": "",
+    "Host": "",
+    "Port": "",
+    "Error": "",
+    "Refresh": "",
+    "State": "",
+    "Bound": "",
+    "Unbound": "",
+    "Port ": "",
+    "insecure_warning_msg": "Disabling Secure mode is not recommended over the internet.",
+    "apply_port_restart": "Apply Port && Restart"
+}

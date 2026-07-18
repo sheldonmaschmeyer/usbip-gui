@@ -1,0 +1,14 @@
+{
+    "no selection to bind": "",
+    " bound successfully": "",
+    "no selection to unbind": "",
+    " unbound succesfully": "",
+    "Local USB Devices": "",
+    "Bind Device": "",
+    "Unbind Device": "",
+    "local_restart_tooltip": "Apply the selected port and restart the local USB/IP server",
+    "local_refresh_tooltip": "Refresh the list of local USB devices",
+    "local_bind_tooltip": "Bind the selected local USB device to make it shareable",
+    "local_unbind_tooltip": "Unbind the selected local USB device to stop sharing it",
+    "cert_regen": "Certificate regenerated successfully. Please restart the server."
+}

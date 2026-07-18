@@ -1,0 +1,23 @@
+{
+    "Bus ID": "ID du bus",
+    "Manufacturer": "Fabricant",
+    "Description": "Description",
+    "Host": "Hôte",
+    "Port": "Port",
+    "Error": "Erreur",
+    "Refresh": "Actualiser",
+    "State": "État",
+    "Bound": "Associé",
+    "Unbound": "Non associé",
+    "Port ": "Port ",
+    "Secure": "Sécurisé",
+    "apply_port_restart": "Appliquer le port et redémarrer",
+    "Show Fingerprint": "Afficher l'empreinte",
+    "Regen Cert": "Régénérer le cert.",
+    "Password required for secure connection": "Mot de passe requis pour une connexion sécurisée",
+    "Certificate Fingerprint": "Empreinte du certificat",
+    "Success": "Succès",
+    "Certificate Check": "Vérification du certificat",
+    "Warning": "Avertissement",
+    "insecure_warning_msg": "Il n'est pas recommandé de désactiver le mode Sécurisé sur Internet."
+}
