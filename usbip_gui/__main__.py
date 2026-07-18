@@ -1,6 +1,6 @@
 """Entry point module."""
 
 if __name__ == "__main__":
-    from .gui import start_app
+    from usbip_gui.gui import start_app
 
     start_app()

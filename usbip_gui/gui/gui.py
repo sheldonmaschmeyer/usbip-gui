@@ -9,8 +9,15 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication, QMainWindow, QTabWidget, QLabel
 from PyQt6.QtGui import QAction, QIcon, QPixmap
 
+from usbip_gui.typings import connect_signal
 
-from .common import DEFAULT_GEOMETRY, get_translator, load_config, save_config
+from .common import (
+    DEFAULT_GEOMETRY,
+    get_translator,
+    load_config,
+    save_config,
+    language_changed,
+)
 from .server import ServerTab
 from .client import ClientTab
 from .menu import create_main_menu
@@ -36,9 +43,8 @@ class UsbIpGui:
         self.root = root
         root_path = Path(__file__).resolve().parent.parent.parent
         icon_path = root_path / "icon" / "usbip-logo.ico"
-        logo_path = root_path / "icon" / "usbip-logo.png"
+        self.logo_path = root_path / "icon" / "usbip-logo.png"
         self.root.setWindowIcon(QIcon(str(icon_path)))
-        self.root.setWindowTitle(t("USB/IP Manager"))
 
         self.server_visible_action = None
         self.client_visible_action = None
@@ -49,11 +55,30 @@ class UsbIpGui:
         if len(geom) == 2:
             self.root.resize(int(geom[0]), int(geom[1]))
 
+        config = load_config()
+        self.show_server_var = bool(config.get("show_server", True))
+        self.show_client_var = bool(config.get("show_client", True))
+        self.default_tab_var = str(config.get("default_tab", "server"))
+
+        self.build_ui()
+
+        connect_signal(language_changed.changed, self._on_language_changed)
+
+    def _on_language_changed(self, _lang: str) -> None:
+        """Rebuild the window contents in place when the language changes."""
+        self.build_ui()
+
+    def build_ui(self) -> None:
+        """
+        (Re)build the window title, tabs, and menu using current translations.
+        """
+        self.root.setWindowTitle(t("USB/IP Manager"))
+
         self.notebook = QTabWidget(self.root)
         self.root.setCentralWidget(self.notebook)
 
         logo_label = QLabel()
-        pixmap = QPixmap(str(logo_path))
+        pixmap = QPixmap(str(self.logo_path))
         if not pixmap.isNull():
             logo_label.setPixmap(
                 pixmap.scaledToHeight(
@@ -66,11 +91,9 @@ class UsbIpGui:
         self.server_tab = ServerTab()
         self.client_tab = ClientTab()
 
-        config = load_config()
-        self.show_server_var = bool(config.get("show_server", True))
-        self.show_client_var = bool(config.get("show_client", True))
-        self.default_tab_var = str(config.get("default_tab", "server"))
-
+        menubar = self.root.menuBar()
+        if menubar is not None:
+            menubar.clear()
         create_main_menu(self)
 
         self.update_tabs()
