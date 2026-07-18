@@ -23,8 +23,9 @@ def show_about_dialog(parent: QWidget | None = None):
         f"{t('Powered by PyQt6 and USB/IP')}\n"
         f"PyQt6: https://doc.qt.io/qtforpython-6/licenses.html\n"
         f"USB/IP: https://github.com/torvalds/linux/blob/master/"
-        f"tools/usb/usbip/README\n\n"
-        f"GitHub: https://github.com/sheldonmaschmeyer/usbip-gui"
+        f"tools/usb/usbip/README\n"
+        f"{t('USB/IP Project')}: https://usbip.sourceforge.net/\n\n"
+        f"GitHub: https://github.com/sheldonmaschmeyer/usbip-gui\n\n"
     )
 
     dialog = QDialog(parent)
