@@ -164,27 +164,27 @@ developing or contributing, the following commands are available:
 - [x] Look at K-Francis-H's remaining TODOs.
 
 ## Screenshots
-![screenshot of usbip_manager_v1.2.0_en_server](screenshots/usbip_manager_v1.2.0_en_server.png)
+![screenshot of usbip_manager_v1.3.0_en_server](screenshots/usbip_manager_v1.3.0_en_server.png)
 
 Figure 1: English Server
 
-![screenshot of usbip_manager_v1.2.0_en_client](screenshots/usbip_manager_v1.2.0_en_client.png)
+![screenshot of usbip_manager_v1.3.0_en_client](screenshots/usbip_manager_v1.3.0_en_client.png)
 
 Figure 2: English Client
 
-![screenshot of usbip_manager_v1.2.0_en_about](screenshots/usbip_manager_v1.2.0_en_about.png)
+![screenshot of usbip_manager_v1.3.0_en_about](screenshots/usbip_manager_v1.3.0_en_about.png)
 
 Figure 3: English About
 
-![screenshot of usbip_manager_v1.2.0_fr_server](screenshots/usbip_manager_v1.2.0_fr_server.png)
+![screenshot of usbip_manager_v1.3.0_fr_server](screenshots/usbip_manager_v1.3.0_fr_server.png)
 
 Figure 4: French Server
 
-![screenshot of usbip_manager_v1.2.0_fr_client](screenshots/usbip_manager_v1.2.0_fr_client.png)
+![screenshot of usbip_manager_v1.3.0_fr_client](screenshots/usbip_manager_v1.3.0_fr_client.png)
 
 Figure 5: French Client
 
-![screenshot of usbip_manager_v1.2.0_fr_about](screenshots/usbip_manager_v1.2.0_fr_about.png)
+![screenshot of usbip_manager_v1.3.0_fr_about](screenshots/usbip_manager_v1.3.0_fr_about.png)
 
 Figure 6: French About
 
