@@ -70,7 +70,7 @@ jobs:
 
       - name: Run Windows installer script
         shell: cmd
-        run: echo.| win_installers\install_windows.bat
+        run: echo.| win_installers\install_usbip_on_windows.bat
 
       - name: Run Black Formatting Check
         run: pixi run black --check .
