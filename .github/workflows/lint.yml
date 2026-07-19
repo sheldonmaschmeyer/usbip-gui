@@ -12,8 +12,12 @@ permissions:
 
 jobs:
   test-and-lint-ubuntu:
-    name: Test and Lint Checks (Ubuntu)
-    runs-on: ubuntu-latest
+    name: Test and Lint Checks (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm]
 
     steps:
       - name: Checkout repository
