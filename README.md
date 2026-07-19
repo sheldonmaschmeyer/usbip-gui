@@ -117,7 +117,7 @@ To securely share a USB device across the internet:
 
 1. Run the installer script from PowerShell or double-click on it:
    ```powershell
-   win_installers/install_windows.bat
+   win_installers/install_usbip_on_windows.bat
    ```
 2. (Optional) Reboot the computer.
 3. Run the app:
