@@ -11,8 +11,8 @@ permissions:
   contents: read
 
 jobs:
-  test-and-lint:
-    name: Test and Lint Checks
+  test-and-lint-ubuntu:
+    name: Test and Lint Checks (Ubuntu)
     runs-on: ubuntu-latest
 
     steps:
@@ -29,6 +29,44 @@ jobs:
 
       - name: Install Qt system dependencies
         run: sudo apt-get update && sudo apt-get install -y python3-pyqt6 xvfb
+
+      - name: Run Black Formatting Check
+        run: pixi run black --check .
+
+      - name: Run Flake8
+        run: pixi run flake8 .
+
+      - name: Run Pylint
+        run: pixi run pylint usbip_gui
+
+      - name: Run Pyright
+        run: pixi run pyright .
+
+      - name: Run Mypy
+        run: pixi run mypy .
+
+      - name: Run Pytest
+        run: pixi run test
+
+  test-and-lint-windows:
+    name: Test and Lint Checks (Windows)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Pixi
+        uses: prefix-dev/setup-pixi@v0.8.1
+        with:
+          pixi-version: latest
+          cache: true
+          locked: false
+          manifest-path: pixi.toml
+
+      - name: Run Windows installer script
+        shell: cmd
+        run: echo.| win_installers\install_windows.bat
 
       - name: Run Black Formatting Check
         run: pixi run black --check .
