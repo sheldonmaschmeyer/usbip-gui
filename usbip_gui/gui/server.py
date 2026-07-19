@@ -30,6 +30,7 @@ from usbip_gui.common import (
     elevate_command,
     run_elevated,
 )
+from usbip_gui.common.common import configure_tree_widget_interaction
 from .. import ssl_tunnel
 
 t = get_translator("server")
@@ -292,6 +293,7 @@ class ServerTab(QWidget):
         self.local_listbox = QTreeWidget()
         set_header_labels(self.local_listbox, local_device_columns())
         self.local_listbox.setSortingEnabled(True)
+        configure_tree_widget_interaction(self.local_listbox)
         connect_signal(
             self.local_listbox.itemDoubleClicked, self.on_double_click
         )

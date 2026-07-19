@@ -164,6 +164,7 @@ class UsbIpGui:
 def start_app():
     """Start app."""
     app = QApplication(sys.argv)
+    app.setStyle("Fusion")
     icon_path = (
         Path(__file__).resolve().parent.parent.parent
         / "icon"

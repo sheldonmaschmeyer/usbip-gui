@@ -40,6 +40,7 @@ from usbip_gui.common import (
     elevate_command,
     run_elevated,
 )
+from usbip_gui.common.common import configure_tree_widget_interaction
 
 t = get_translator("client")
 
@@ -524,6 +525,7 @@ class ClientTab(QWidget):
         self.remote_listbox = QTreeWidget()
         set_header_labels(self.remote_listbox, device_columns())
         self.remote_listbox.setSortingEnabled(True)
+        configure_tree_widget_interaction(self.remote_listbox)
         connect_signal(
             self.remote_listbox.itemDoubleClicked, self.on_double_click_remote
         )

@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 from typing import Optional, Dict, Tuple, Union, List
 
+from PyQt6.QtGui import QColor, QPalette
 from PyQt6.QtWidgets import QTreeWidgetItem, QTreeWidget
 
 from usbip_gui.typings import connect_signal
@@ -41,6 +42,29 @@ def set_min_column_widths(tree: QTreeWidget, min_widths: List[int]) -> None:
     for i, w in enumerate(min_widths):
         if tree.columnWidth(i) < w:
             tree.setColumnWidth(i, w)
+
+
+def configure_tree_widget_interaction(tree: QTreeWidget) -> None:
+    """Enable consistent hover and selected-row colors across platforms."""
+    tree.setMouseTracking(True)
+    viewport = tree.viewport()
+    if viewport:
+        viewport.setMouseTracking(True)
+
+    palette = tree.palette()
+    groups = (QPalette.ColorGroup.Active, QPalette.ColorGroup.Inactive)
+    for group in groups:
+        palette.setColor(
+            group,
+            QPalette.ColorRole.Highlight,
+            QColor("#89b4fa"),
+        )
+        palette.setColor(
+            group,
+            QPalette.ColorRole.HighlightedText,
+            QColor("#1e1e2e"),
+        )
+    tree.setPalette(palette)
 
 
 def get_config_dir() -> Path:

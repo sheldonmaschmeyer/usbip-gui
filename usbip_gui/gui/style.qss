@@ -24,7 +24,29 @@ QTreeWidget {
     font-size: 12pt;
     background: #181825;
     alternate-background-color: #1e1e2e;
+    selection-background-color: #89b4fa;
+    selection-color: #1e1e2e;
     border: none;
+}
+QTreeView {
+    selection-background-color: #89b4fa;
+    selection-color: #1e1e2e;
+    show-decoration-selected: 1;
+}
+QTreeWidget::item:selected,
+QTreeWidget::item:selected:active,
+QTreeWidget::item:selected:!active {
+    background-color: #89b4fa;
+    color: #1e1e2e;
+}
+QTreeView::item:selected,
+QTreeView::item:selected:active,
+QTreeView::item:selected:!active {
+    background-color: #89b4fa;
+    color: #1e1e2e;
+}
+QTreeWidget::item:hover {
+    background: #313244;
 }
 QHeaderView::section {
     font-size: 12pt;
