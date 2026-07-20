@@ -84,6 +84,8 @@ class Device(_objfinalizer.AutoFinalizedObject):
     address: Incomplete
     port_number: Incomplete
     speed: Incomplete
+    idVendor: int
+    idProduct: int
     def __init__(self, dev, backend) -> None: ...
     @property
     def langids(self): ...

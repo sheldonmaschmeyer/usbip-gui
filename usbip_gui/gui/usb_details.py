@@ -66,6 +66,64 @@ def get_string(device: usb.core.Device, index: int) -> str:
         return ""
 
 
+def _resolve_inf_string(raw: str) -> str:
+    """Strip leading INF resource reference from a Windows registry value.
+
+    Many Windows registry strings use the format
+    ``@oem5.inf,%key%;Actual String`` or simply ``Actual String``.
+    This function returns only the human-readable trailing part.
+    """
+    return raw.rsplit(";", 1)[-1].strip()
+
+
+def get_strings_from_registry(
+    vid: int, pid: int
+) -> Tuple[str, str]:
+    """Read manufacturer and product from the Windows registry.
+
+    Used as a fallback on Windows when the device is claimed by a kernel
+    driver (e.g. usbprint.sys for printers) that prevents pyusb / libusb
+    from opening the device to read USB string descriptors.
+
+    Returns a ``(manufacturer, product)`` tuple; either value may be an
+    empty string if the registry entry is absent.
+    """
+    import winreg  # type: ignore[import-untyped,import-not-found]  # pylint: disable=import-outside-toplevel,import-error
+
+    base = (
+        f"SYSTEM\\CurrentControlSet\\Enum\\USB"
+        f"\\VID_{vid:04X}&PID_{pid:04X}"
+    )
+
+    def _qv(inst: object, name: str) -> str:  # type: ignore[type-arg]
+        try:
+            val = winreg.QueryValueEx(inst, name)[0]  # type: ignore[arg-type]
+            return _resolve_inf_string(str(val))
+        except OSError:
+            return ""
+
+    try:
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, base) as key:  # type: ignore[attr-defined]
+            index = 0
+            while True:
+                try:
+                    instance = winreg.EnumKey(key, index)  # type: ignore[attr-defined]
+                except OSError:
+                    break
+                try:
+                    with winreg.OpenKey(key, instance) as inst:  # type: ignore[attr-defined]
+                        mfg = _qv(inst, "Mfg")
+                        desc = _qv(inst, "DeviceDesc")
+                        if mfg or desc:
+                            return mfg, desc
+                except OSError:
+                    pass
+                index += 1
+    except OSError:
+        pass
+    return "", ""
+
+
 def main() -> None:
     """Entry point: read descriptor strings for the bus ID in sys.argv[1]."""
     bus_id = sys.argv[1]
@@ -81,12 +139,27 @@ def main() -> None:
         if device is None:
             payload["error"] = f"Could not find USB device {bus_id}."
         else:
-            payload["manufacturer"] = get_string(
+            manufacturer = get_string(
                 device, getattr(device, "iManufacturer", 0)
             )
-            payload["product"] = get_string(
+            product = get_string(
                 device, getattr(device, "iProduct", 0)
             )
+
+            # On Windows, devices claimed by kernel drivers (printers,
+            # audio, etc.) block libusb from reading string descriptors.
+            # Fall back to the Windows registry which already holds the
+            # strings installed by the device driver INF.
+            if sys.platform == "win32" and not manufacturer and not product:
+                vid: Optional[int] = getattr(device, "idVendor", None)
+                pid: Optional[int] = getattr(device, "idProduct", None)
+                if vid is not None and pid is not None:
+                    manufacturer, product = get_strings_from_registry(
+                        vid, pid
+                    )
+
+            payload["manufacturer"] = manufacturer
+            payload["product"] = product
     except Exception as exc:  # pylint: disable=broad-exception-caught
         payload["error"] = str(exc)
 
