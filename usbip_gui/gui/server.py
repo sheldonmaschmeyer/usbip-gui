@@ -165,7 +165,16 @@ def _usb_details_script_path() -> str:
 
 def _read_local_usb_descriptor_details(bus_id: str) -> Tuple[str, str]:
     """Read iManufacturer and iProduct for a local USB device."""
-    result = run_elevated([sys.executable, _usb_details_script_path(), bus_id])
+    cmd = [sys.executable, _usb_details_script_path(), bus_id]
+    if sys.platform == "win32":
+        # ShellExecuteExW (used by run_elevated) cannot capture stdout,
+        # and reading USB descriptors via pyusb does not require elevation
+        # on Windows.
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, check=False
+        )
+    else:
+        result = run_elevated(cmd)
     if result.returncode != 0:
         details = str(result.stderr).strip() or str(result.stdout).strip()
         raise OSError(details or "Failed to read USB descriptor details.")
