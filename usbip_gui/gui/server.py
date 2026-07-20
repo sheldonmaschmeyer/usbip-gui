@@ -403,8 +403,13 @@ class ServerTab(QWidget):
             self.local_listbox.addTopLevelItem(item)
 
             description = device[3]
-            if _is_unknown_product(description):
-                suffix = _extract_unknown_product_suffix(description)
+            on_windows = sys.platform == "win32"
+            if _is_unknown_product(description) or on_windows:
+                suffix = (
+                    f" ({description})"
+                    if on_windows
+                    else _extract_unknown_product_suffix(description)
+                )
                 details_widget = QWidget(self.local_listbox)
                 row_font = self.local_listbox.font()
                 details_widget.setFont(row_font)
@@ -444,7 +449,11 @@ class ServerTab(QWidget):
         """Reveal descriptor strings for a local USB device."""
         bus_id = item.text(0)
         current_description = item.text(3)
-        suffix = _extract_unknown_product_suffix(current_description)
+        suffix = (
+            f" ({current_description})"
+            if sys.platform == "win32"
+            else _extract_unknown_product_suffix(current_description)
+        )
         try:
             manufacturer, product = _read_local_usb_descriptor_details(bus_id)
         except OSError as e:
