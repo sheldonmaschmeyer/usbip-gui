@@ -41,6 +41,11 @@ from usbip_gui.common import (
     run_elevated,
 )
 from usbip_gui.common.common import configure_tree_widget_interaction
+from usbip_gui.product_detection import (
+    ItemUpdater,
+    enrich_remote_device_item,
+    is_unknown_product,
+)
 
 t = get_translator("client")
 
@@ -131,6 +136,7 @@ def _detect_windows_attach_bus_option(exe: str) -> str:
 
 def device_columns() -> List[str]:
     """Column headers for the remote device tree, for the active language."""
+    # pylint: disable=duplicate-code
     return [
         t("Host"),
         t("Port"),
@@ -138,15 +144,16 @@ def device_columns() -> List[str]:
         t("State"),
         t("Manufacturer"),
         t("Description"),
+        t("VID : PID"),
     ]
 
 
-def parse_remote_list(text: str) -> List[Tuple[str, str, str]]:
+def parse_remote_list(text: str) -> List[Tuple[str, str, str, str]]:
     """Parse remote list."""
     if "no exportable devices found on" in text:
         return []
 
-    rows: List[Tuple[str, str, str]] = []
+    rows: List[Tuple[str, str, str, str]] = []
     busid_regex = re.compile("^\\d+-\\d+$|^\\d+-\\d+\\.\\d+$")
     lines = text.strip().split("\n")
     for line in lines:
@@ -155,19 +162,34 @@ def parse_remote_list(text: str) -> List[Tuple[str, str, str]]:
             continue
         m = busid_regex.match(vals[0].strip())
         if m:
-            rows.append(
-                (
-                    vals[0].strip(),
-                    vals[1].strip(),
-                    vals[2].strip() + ":" + vals[3].strip(),
-                )
-            )
+            bus_id = vals[0].strip()
+            manufacturer = vals[1].strip()
+            description = vals[2].strip() + ":" + vals[3].strip()
+
+            vid_pid = ""
+            vid_match = re.search(r"\(([^)]+)\)", description)
+            if vid_match:
+                vid_pid = vid_match.group(1)
+                description = description[: -len(vid_match.group(0))].strip()
+
+            if sys.platform == "win32" and is_unknown_product(description):
+                original_desc = manufacturer
+                first_word = original_desc.split(" ")[0]
+                if first_word.lower() not in ("usb", "generic", "unknown", ""):
+                    manufacturer = first_word
+                else:
+                    manufacturer = ""
+                description = original_desc.split(",")[0].strip()
+
+            rows.append((bus_id, vid_pid, manufacturer, description))
     return rows
 
 
-def parse_attached_list(text: str) -> List[Tuple[str, int, str, str, str]]:
+def parse_attached_list(
+    text: str,
+) -> List[Tuple[str, int, str, str, str, str]]:
     """Parse attached list."""
-    rows: List[Tuple[str, int, str, str, str]] = []
+    rows: List[Tuple[str, int, str, str, str, str]] = []
     lines = text.strip().split("\n")
     for i, line in enumerate(lines):
         if "Port " in line:
@@ -179,11 +201,28 @@ def parse_attached_list(text: str) -> List[Tuple[str, int, str, str, str]]:
             manufacturer = info[0].strip()
             description = info[1].strip() + ":" + info[2].strip()
 
+            vid_pid = ""
+            vid_match = re.search(r"\(([^)]+)\)", description)
+            if vid_match:
+                vid_pid = vid_match.group(1)
+                description = description[: -len(vid_match.group(0))].strip()
+
+            if sys.platform == "win32" and is_unknown_product(description):
+                original_desc = manufacturer
+                first_word = original_desc.split(" ")[0]
+                if first_word.lower() not in ("usb", "generic", "unknown", ""):
+                    manufacturer = first_word
+                else:
+                    manufacturer = ""
+                description = original_desc.split(",")[0].strip()
+
             businfo = busid_line.strip().split("->")
             bus_id = businfo[0].strip()
             host = urlparse(businfo[1].strip())[1]  # netloc
 
-            rows.append((host, port, bus_id, manufacturer, description))
+            rows.append(
+                (host, port, bus_id, vid_pid, manufacturer, description)
+            )
     return rows
 
 
@@ -349,7 +388,7 @@ def get_or_create_client_tunnel(
 
 def list_remote_usb(
     server_ip: str, port: int = 3240, secure: bool = False, password: str = ""
-) -> List[Tuple[str, str, str]]:
+) -> List[Tuple[str, str, str, str]]:
     """List remote usb."""
     target_ip, target_port = get_or_create_client_tunnel(
         server_ip, port, secure, password
@@ -371,7 +410,7 @@ def list_remote_usb(
     return parse_remote_list(result.stdout)
 
 
-def list_attached_usb() -> List[Tuple[str, int, str, str, str]]:
+def list_attached_usb() -> List[Tuple[str, int, str, str, str, str]]:
     """List attached usb."""
     cmd = [_resolve_usbip_client_executable(), "port"]
     if sys.platform != "win32":
@@ -470,7 +509,13 @@ class ClientTab(QWidget):
 
     def __init__(self, parent: QWidget | None = None):
         """Initialize the class instance."""
+        # pylint: disable=duplicate-code
         super().__init__(parent)
+
+        self._item_updater = ItemUpdater(self)
+        connect_signal(
+            self._item_updater.update, self._item_updater.apply_text
+        )
 
         layout = QVBoxLayout(self)
 
@@ -568,7 +613,7 @@ class ClientTab(QWidget):
 
         attached_by_busid = {d[2]: d for d in attached_devices}
 
-        for r_bus_id, manufacturer, description in remote_devices:
+        for r_bus_id, vid_pid, manufacturer, description in remote_devices:
             status = t("Detached")
             local_port = -1
             if r_bus_id in attached_by_busid:
@@ -585,15 +630,27 @@ class ClientTab(QWidget):
                     status,
                     manufacturer,
                     description,
+                    vid_pid,
                 ],
             )
             item.setData(0, Qt.ItemDataRole.UserRole, local_port)
             self.remote_listbox.addTopLevelItem(item)
 
+            if sys.platform == "win32":
+                enrich_remote_device_item(
+                    self._item_updater,
+                    item,
+                    vid_pid,
+                    manufacturer,
+                    manufacturer_col=4,
+                    description_col=5,
+                )
+
         for (
             host,
             att_port,
             a_bus_id,
+            vid_pid,
             manufacturer,
             description,
         ) in attached_by_busid.values():
@@ -612,10 +669,21 @@ class ClientTab(QWidget):
                     status,
                     manufacturer,
                     description,
+                    vid_pid,
                 ],
             )
             item.setData(0, Qt.ItemDataRole.UserRole, att_port)
             self.remote_listbox.addTopLevelItem(item)
+
+            if sys.platform == "win32":
+                enrich_remote_device_item(
+                    self._item_updater,
+                    item,
+                    vid_pid,
+                    manufacturer,
+                    manufacturer_col=4,
+                    description_col=5,
+                )
 
         for i in range(len(device_columns())):
             self.remote_listbox.resizeColumnToContents(i)

@@ -8,7 +8,7 @@ wrappers, we avoid suppressing strict type-checker rules (like
 
 Linter exceptions used in this file:
 
-- `# pragma: no cover`: Used on`raiseNotImplementedError` lines inside
+- ``: Used on`raiseNotImplementedError` lines inside
   Protocols. Because Protocols are purely for static type definition, their
   bodies are never executed at runtime. This pragma ensures they don't
   incorrectly drop test coverage.
@@ -34,7 +34,7 @@ class _TypedSignal(Protocol):
 
     def connect(self, slot: Callable[P, R], /) -> QMetaObject.Connection:
         """Connect a slot to the signal."""
-        raise NotImplementedError  # pragma: no cover
+        raise NotImplementedError
 
 
 def connect_signal(
@@ -53,7 +53,7 @@ class _TreeWidgetHeaderLabels(Protocol):
     # pylint: disable=invalid-name
     def setHeaderLabels(self, labels: Iterable[str]) -> None:
         """Set header labels."""
-        raise NotImplementedError  # pragma: no cover
+        raise NotImplementedError
 
 
 def set_header_labels(tree: QTreeWidget, labels: Iterable[str]) -> None:
@@ -69,7 +69,7 @@ class _AddAction(Protocol):
     # pylint: disable=invalid-name
     def addAction(self, action: QAction) -> None:
         """Add action."""
-        raise NotImplementedError  # pragma: no cover
+        raise NotImplementedError
 
 
 def add_action(parent: object, action: QAction) -> None:

@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import QTreeWidgetItem, QTreeWidget
 
 from usbip_gui.typings import connect_signal
 
-VERSION = "1.4.0"
+VERSION = "1.4.2"
 
 USBIPD_PORT = 3240
 DEFAULT_GEOMETRY = "900x842"
