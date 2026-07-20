@@ -1,13 +1,16 @@
 """Server tab implementation for exposing local USB devices."""
 
-import subprocess
+import json
 import os
-import sys
-import time
-import threading
 import re
+import subprocess
+import sys
+import threading
+import time
+from pathlib import Path
 from typing import List, Tuple
 
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -139,6 +142,52 @@ def parse_local_list(text: str) -> List[Tuple[str, str, str, str]]:
     return rows
 
 
+def _is_unknown_product(description: str) -> bool:
+    """Return True when usbip only exposed an unknown product label."""
+    normalized = description.strip().lower()
+    return normalized == "unknown product" or normalized.startswith(
+        "unknown product ("
+    )
+
+
+def _extract_unknown_product_suffix(description: str) -> str:
+    """Return the VID/PID suffix from an unknown-product label."""
+    match = re.search(r"\(([^)]+)\)\s*$", description.strip())
+    if match:
+        return f" ({match.group(1)})"
+    return ""
+
+
+def _usb_details_script_path() -> str:
+    """Return the absolute path to the usb_details.py probe script."""
+    return str(Path(__file__).parent / "usb_details.py")
+
+
+def _read_local_usb_descriptor_details(bus_id: str) -> Tuple[str, str]:
+    """Read iManufacturer and iProduct for a local USB device."""
+    result = run_elevated([sys.executable, _usb_details_script_path(), bus_id])
+    if result.returncode != 0:
+        details = str(result.stderr).strip() or str(result.stdout).strip()
+        raise OSError(details or "Failed to read USB descriptor details.")
+
+    payload_text = str(result.stdout).strip()
+    if not payload_text:
+        raise OSError("USB descriptor probe did not return any data.")
+
+    try:
+        payload = json.loads(payload_text)
+    except json.JSONDecodeError as exc:
+        raise OSError("USB descriptor probe returned invalid data.") from exc
+
+    error = str(payload.get("error", "")).strip()
+    if error:
+        raise OSError(error)
+
+    manufacturer = str(payload.get("manufacturer", "")).strip()
+    product = str(payload.get("product", "")).strip()
+    return manufacturer, product
+
+
 def parse_windows_local_list(text: str) -> List[Tuple[str, str, str, str]]:
     """Parse windows local list."""
     if not text or not text.strip():
@@ -159,7 +208,7 @@ def parse_windows_local_list(text: str) -> List[Tuple[str, str, str, str]]:
                 if "Shared" in state or "Attached" in state
                 else t("Unbound")
             )
-            rows.append((bus_id, gui_state, vid_pid, device))
+            rows.append((bus_id, gui_state, device, vid_pid))
     return rows
 
 
@@ -353,8 +402,73 @@ class ServerTab(QWidget):
             )
             self.local_listbox.addTopLevelItem(item)
 
+            description = device[3]
+            if _is_unknown_product(description):
+                suffix = _extract_unknown_product_suffix(description)
+                details_widget = QWidget(self.local_listbox)
+                row_font = self.local_listbox.font()
+                details_widget.setFont(row_font)
+                details_layout = QHBoxLayout(details_widget)
+                details_layout.setContentsMargins(0, 0, 0, 0)
+                details_layout.setSpacing(8)
+
+                show_details_button = QPushButton(t("Show Details"))
+                show_details_button.setFont(row_font)
+                suffix_label = QLabel(suffix)
+                suffix_label.setFont(row_font)
+                details_layout.addWidget(show_details_button)
+                if suffix:
+                    details_layout.addWidget(suffix_label)
+                details_layout.addStretch()
+
+                def show_details(
+                    _checked: bool = False,
+                    current_item: SortableTreeWidgetItem = item,
+                ) -> None:
+                    self.show_local_device_details(current_item)
+
+                connect_signal(
+                    show_details_button.clicked,
+                    show_details,
+                )
+                self.local_listbox.setItemWidget(item, 3, details_widget)
+            else:
+                self.local_listbox.setItemWidget(item, 3, None)
+
         for i in range(len(local_device_columns())):
             self.local_listbox.resizeColumnToContents(i)
+
+    def show_local_device_details(
+        self, item: SortableTreeWidgetItem
+    ) -> None:
+        """Reveal descriptor strings for a local USB device."""
+        bus_id = item.text(0)
+        current_description = item.text(3)
+        suffix = _extract_unknown_product_suffix(current_description)
+        try:
+            manufacturer, product = _read_local_usb_descriptor_details(bus_id)
+        except OSError as e:
+            QMessageBox.critical(self, t("Error"), str(e))
+            return
+
+        details = " ".join(
+            part for part in (manufacturer, product) if part.strip()
+        ).strip()
+        if not details:
+            QMessageBox.information(
+                self,
+                t("Info"),
+                t("No USB descriptor details were available."),
+            )
+            return
+
+        details_label = QLabel(f"{details}{suffix}")
+        details_label.setFont(self.local_listbox.font())
+        details_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        details_label.setToolTip(details)
+        self.local_listbox.setItemWidget(item, 3, details_label)
 
     def restart_server(self):
         """Restart server."""

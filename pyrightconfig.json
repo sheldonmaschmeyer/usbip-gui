@@ -1,6 +1,7 @@
 {
   "typeCheckingMode": "strict",
   "include": ["usbip_gui"],
+  "stubPath": "usbip_gui/typings",
   "venvPath": ".pixi/envs",
   "venv": "default",
 }

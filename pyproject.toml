@@ -14,5 +14,6 @@ max-returns = 10
 min-public-methods = 0
 
 [tool.mypy]
+mypy_path = "usbip_gui/typings"
 check_untyped_defs = true
 disallow_any_explicit = true
