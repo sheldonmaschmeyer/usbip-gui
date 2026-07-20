@@ -1,8 +1,16 @@
 [tool.black]
 line-length = 79
 
+[tool.flake8]
+max-line-length = 79
+exclude = [".git", ".pixi", "__pycache__"]
+per-file-ignores = [
+    "*.pyi: E302, E305"
+]
+
 [tool.pylint.main]
 ignore = [".git", ".pixi"]
+ignore-patterns = ["^.*\\.pyi$"]
 extension-pkg-allow-list = ["PyQt6"]
 
 [tool.pylint.design]
@@ -14,5 +22,35 @@ max-returns = 10
 min-public-methods = 0
 
 [tool.mypy]
+mypy_path = "usbip_gui/typings"
+exclude = ["^usbip_gui/typings/"]
 check_untyped_defs = true
 disallow_any_explicit = true
+
+[[tool.mypy.overrides]]
+module = ["usbip_gui.typings.usb.*", "usb.*"]
+ignore_missing_imports = true
+disallow_any_explicit = false
+
+[tool.pyright]
+typeCheckingMode = "strict"
+pythonPlatform = "All"
+include = ["usbip_gui"]
+exclude = [
+  ".pixi",
+  "**/*.pyi",
+  "**/*.ipynb",
+  "**/node_modules",
+  "**/__pycache__",
+  "**/.*",
+]
+stubPath = "usbip_gui/typings"
+venvPath = ".pixi/envs"
+venv = "default"
+
+# Filter warning is required as pyUSB uses a private method that is deprecated
+# in Python 3.13, and this is not something we can fix.
+[tool.pytest.ini_options]
+filterwarnings = [
+    "ignore:Due to '_pack_':DeprecationWarning",
+]

@@ -141,12 +141,36 @@ def test_parse_remote_list():
         "2-2.1: Mouse : Generic (0000:0000)"
     )
     rows = parse_remote_list(text)
-    assert len(rows) == 2
-    assert rows[0] == ("1-1", "Apple, Inc.", "iPhone (05ac:12a8)")
+    assert rows[0] == ("1-1", "05ac:12a8", "Apple, Inc.", "iPhone")
+    assert rows[1] == ("2-2.1", "0000:0000", "Mouse", "Generic")
 
     # Test no exportable
     empty = parse_remote_list("no exportable devices found on host")
     assert not empty
+
+    # Test unknown product on win32
+    with patch("usbip_gui.gui.client.sys.platform", "win32"):
+        rows = parse_remote_list(
+            "1-1: Original Manufacturer : unknown product (1234:5678)"
+        )
+        assert len(rows) == 1
+        assert rows[0] == (
+            "1-1",
+            "1234:5678",
+            "Original",
+            "Original Manufacturer",
+        )
+
+        # Test generic first word
+        rows2 = parse_remote_list(
+            "1-1: USB Original Manufacturer : unknown product (1234:5678)"
+        )
+        assert rows2[0] == (
+            "1-1",
+            "1234:5678",
+            "",
+            "USB Original Manufacturer",
+        )
 
 
 def test_parse_attached_list():
@@ -154,7 +178,46 @@ def test_parse_attached_list():
     text = "Port 1:\nManufacturer: Desc : Extra\n1-1 -> usb://192.168.1.100\n"
     rows = parse_attached_list(text)
     assert len(rows) == 1
-    assert rows[0] == ("192.168.1.100", 1, "1-1", "Manufacturer", "Desc:Extra")
+    assert rows[0] == (
+        "192.168.1.100",
+        1,
+        "1-1",
+        "",
+        "Manufacturer",
+        "Desc:Extra",
+    )
+
+    # Test unknown product attached on win32
+    with patch("usbip_gui.gui.client.sys.platform", "win32"):
+        text_attached_unknown = (
+            "Port 1:\nBrother, Inc: unknown product (1234:5678) : \n"
+            "1-1 -> usb://192.168.1.100\n"
+        )
+        rows = parse_attached_list(text_attached_unknown)
+        assert len(rows) == 1
+        assert rows[0] == (
+            "192.168.1.100",
+            1,
+            "1-1",
+            "1234:5678",
+            "Brother,",
+            "Brother",
+        )
+
+        # Test generic first word
+        text_attached_generic = (
+            "Port 1:\nUSB Brother: unknown product (1234:5678) : \n"
+            "1-1 -> usb://192.168.1.100\n"
+        )
+        rows2 = parse_attached_list(text_attached_generic)
+        assert rows2[0] == (
+            "192.168.1.100",
+            1,
+            "1-1",
+            "1234:5678",
+            "",
+            "USB Brother",
+        )
 
 
 def test_get_or_create_client_tunnel_insecure():
@@ -384,7 +447,7 @@ def test_refresh_remote(
     mock_item: MagicMock,
 ):
     """Test refresh remote."""
-    mock_remote_list.return_value = [("1-1", "Man", "Desc")]
+    mock_remote_list.return_value = [("1-1", "1234:5678", "Man", "Desc")]
     mock_attached_list.return_value = []
     tab = MagicMock()
     tab.remote_ip_input.text.return_value = "localhost"
@@ -393,8 +456,15 @@ def test_refresh_remote(
     tab.remote_listbox.clear.assert_called_once()
     mock_item.assert_called_once_with(
         tab.remote_listbox,
-        ["localhost", "1234", "1-1", "Detached", "Man", "Desc"],
+        ["localhost", "1234", "1-1", "Detached", "Man", "Desc", "1234:5678"],
     )
+
+    with patch("usbip_gui.gui.client.sys.platform", "win32"):
+        with patch(
+            "usbip_gui.gui.client.enrich_remote_device_item"
+        ) as mock_enrich:
+            ClientTab.refresh_remote(tab)
+            mock_enrich.assert_called_once()
 
 
 @patch("usbip_gui.gui.client.QMessageBox.critical")
@@ -799,10 +869,10 @@ def test_refresh_remote_with_attached():
     """Test refresh remote with devices already attached."""
     with patch("usbip_gui.gui.client.list_remote_usb") as mock_remote:
         with patch("usbip_gui.gui.client.list_attached_usb") as mock_attached:
-            mock_remote.return_value = [("1-1", "Man", "Desc")]
+            mock_remote.return_value = [("1-1", "1234:5678", "Man", "Desc")]
             mock_attached.return_value = [
-                ("localhost:1234", 1, "1-1", "Man", "Desc"),
-                ("localhost:4321", 2, "1-2", "Man2", "Desc2"),
+                ("localhost:1234", 1, "1-1", "1234:5678", "Man", "Desc"),
+                ("localhost:4321", 2, "1-2", "8765:4321", "Man2", "Desc2"),
             ]
             tab = ClientTab(None)
             tab.remote_ip_input.setText("localhost")
@@ -813,6 +883,13 @@ def test_refresh_remote_with_attached():
             ) as mock_add:
                 tab.refresh_remote()
                 assert mock_add.call_count == 2
+
+                with patch("usbip_gui.gui.client.sys.platform", "win32"):
+                    with patch(
+                        "usbip_gui.gui.client.enrich_remote_device_item"
+                    ) as mock_enrich:
+                        tab.refresh_remote()
+                        assert mock_enrich.call_count == 2
 
 
 def test_attach_remote_already_attached():

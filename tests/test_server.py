@@ -26,8 +26,19 @@ def test_parse_local_list():
     rows = parse_local_list(text)
     assert len(rows) == 1
     assert rows[0][0] == "1-1"
+    assert rows[0][1] == "Unbound"
     assert rows[0][2] == "Manufacturer"
     assert rows[0][3] == "Desc"
+    assert rows[0][4] == "046d:c52b"
+
+    # Test unknown product stripping
+    unknown_text = (
+        " - busid 1-2 (8765:4321)\n"
+        "   Unknown : unknown product (8765:4321)\n"
+    )
+    rows2 = parse_local_list(unknown_text)
+    assert len(rows2) == 1
+    assert rows2[0][3] == "unknown product"
 
 
 @patch("usbip_gui.gui.server.subprocess.run")
@@ -154,13 +165,19 @@ def test_regenerate_cert(
 @patch("usbip_gui.gui.server.list_local_usb")
 def test_refresh_local(mock_list: MagicMock, mock_item: MagicMock):
     """Test refresh local devices list."""
-    mock_list.return_value = [("1-1", "Bound", "Man", "Desc")]
+    mock_list.return_value = [("1-1", "Bound", "Man", "Desc", "1234:5678")]
     tab = MagicMock()
     ServerTab.refresh_local(tab)
     tab.local_listbox.clear.assert_called_once()
     mock_item.assert_called_once_with(
-        tab.local_listbox, ["1-1", "Bound", "Man", "Desc"]
+        tab.local_listbox, ["1-1", "Bound", "Man", "Desc", "1234:5678"]
     )
+    assert tab.local_listbox.addTopLevelItem.called
+
+    with patch("usbip_gui.gui.server.sys.platform", "win32"):
+        with patch("usbip_gui.gui.server.enrich_device_item") as mock_enrich:
+            ServerTab.refresh_local(tab)
+            mock_enrich.assert_called_once()
 
 
 @patch("usbip_gui.gui.server.QMessageBox.critical")
@@ -359,7 +376,9 @@ def test_parse_windows_local_list():
     assert len(rows) == 3
     assert rows[0][0] == "1-1"
     assert rows[0][1] == "Unbound"
-    assert rows[0][2] == "046d:c52b"
+    assert rows[0][2] == ""
+    assert rows[0][3] == "Manufacturer Desc"
+    assert rows[0][4] == "046d:c52b"
     assert rows[1][1] == "Bound"
     assert rows[2][1] == "Bound"
 

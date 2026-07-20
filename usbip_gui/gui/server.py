@@ -1,11 +1,11 @@
 """Server tab implementation for exposing local USB devices."""
 
-import subprocess
 import os
-import sys
-import time
-import threading
 import re
+import subprocess
+import sys
+import threading
+import time
 from typing import List, Tuple
 
 from PyQt6.QtWidgets import (
@@ -31,6 +31,12 @@ from usbip_gui.common import (
     run_elevated,
 )
 from usbip_gui.common.common import configure_tree_widget_interaction
+from usbip_gui.product_detection import (
+    ItemUpdater,
+    enrich_device_item,
+    extract_unknown_product_suffix,
+    is_unknown_product,
+)
 from .. import ssl_tunnel
 
 t = get_translator("server")
@@ -38,11 +44,13 @@ t = get_translator("server")
 
 def local_device_columns() -> List[str]:
     """Column headers for the local device tree, for the active language."""
+    # pylint: disable=duplicate-code
     return [
         t("Bus ID"),
         t("State"),
         t("Manufacturer"),
         t("Description"),
+        t("VID : PID"),
     ]
 
 
@@ -109,12 +117,12 @@ def init_usbip_server(
             )
 
 
-def parse_local_list(text: str) -> List[Tuple[str, str, str, str]]:
+def parse_local_list(text: str) -> List[Tuple[str, str, str, str, str]]:
     """Parse local list."""
     if not text or not text.strip():
         return []
 
-    rows: List[Tuple[str, str, str, str]] = []
+    rows: List[Tuple[str, str, str, str, str]] = []
     devices = text.strip().split("\n\n")
     for device in devices:
         lines = device.strip().split("\n")
@@ -124,8 +132,20 @@ def parse_local_list(text: str) -> List[Tuple[str, str, str, str]]:
         man_info = lines[1].split(":")
 
         bus_id = bus_info[2] if len(bus_info) > 2 else ""
-        manufacturer = man_info[0] if len(man_info) > 0 else ""
-        description = ":".join(man_info[1:]) if len(man_info) > 1 else ""
+        vid_pid = ""
+        vid_match = re.search(r"\(([^)]+)\)", lines[0])
+        if vid_match:
+            vid_pid = vid_match.group(1)
+
+        manufacturer = man_info[0].strip() if len(man_info) > 0 else ""
+        description = (
+            ":".join(man_info[1:]).strip() if len(man_info) > 1 else ""
+        )
+
+        # Strip the redundant suffix if it's in the description
+        suffix_match = extract_unknown_product_suffix(description)
+        if suffix_match:
+            description = description[: -len(suffix_match)].strip()
 
         state = t("Unbound")
         if bus_id:
@@ -135,16 +155,18 @@ def parse_local_list(text: str) -> List[Tuple[str, str, str, str]]:
                 if driver == "usbip-host":
                     state = t("Bound")
 
-        rows.append((bus_id, state, manufacturer, description))
+        rows.append((bus_id, state, manufacturer, description, vid_pid))
     return rows
 
 
-def parse_windows_local_list(text: str) -> List[Tuple[str, str, str, str]]:
+def parse_windows_local_list(
+    text: str,
+) -> List[Tuple[str, str, str, str, str]]:
     """Parse windows local list."""
     if not text or not text.strip():
         return []
 
-    rows: List[Tuple[str, str, str, str]] = []
+    rows: List[Tuple[str, str, str, str, str]] = []
     for line in text.strip().split("\n"):
         match = re.match(
             r"^(\d+-\d+(?:\.\d+)*)\s+"
@@ -159,11 +181,11 @@ def parse_windows_local_list(text: str) -> List[Tuple[str, str, str, str]]:
                 if "Shared" in state or "Attached" in state
                 else t("Unbound")
             )
-            rows.append((bus_id, gui_state, vid_pid, device))
+            rows.append((bus_id, gui_state, "", device, vid_pid))
     return rows
 
 
-def list_local_usb() -> List[Tuple[str, str, str, str]]:
+def list_local_usb() -> List[Tuple[str, str, str, str, str]]:
     """List local usb."""
     if sys.platform == "win32":
         result = subprocess.run(
@@ -206,7 +228,13 @@ class ServerTab(QWidget):
 
     def __init__(self, parent: QWidget | None = None):
         """Initialize the class instance."""
+        # pylint: disable=duplicate-code
         super().__init__(parent)
+
+        self._item_updater = ItemUpdater(self)
+        connect_signal(
+            self._item_updater.update, self._item_updater.apply_text
+        )
 
         layout = QVBoxLayout(self)
 
@@ -347,11 +375,20 @@ class ServerTab(QWidget):
             )
             return
         self.local_listbox.clear()
+        on_windows = sys.platform == "win32"
         for device in local_devices:
             item = SortableTreeWidgetItem(
                 self.local_listbox, [str(d) for d in device]
             )
             self.local_listbox.addTopLevelItem(item)
+
+            bus_id = device[0]
+            description = device[3]
+
+            if on_windows or is_unknown_product(description):
+                enrich_device_item(
+                    self._item_updater, item, bus_id, on_windows, description
+                )
 
         for i in range(len(local_device_columns())):
             self.local_listbox.resizeColumnToContents(i)
