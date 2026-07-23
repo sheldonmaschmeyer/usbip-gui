@@ -11,6 +11,7 @@
   - [Local Installation (Without Docker)](#local-installation-without-docker)
   - [Development Commands](#development-commands)
   - [Tasks](#tasks)
+  - [Architecture](#architecture)
   - [Screenshots](#screenshots)
   - [References](#references)
   - [Donations](#donations)
@@ -178,6 +179,69 @@ developing or contributing, the following commands are available:
 - [ ] Fully packaged Inno Setup.
 - [x] Cross-architecture (ARM and x86) production testing.
 - [x] Look at K-Francis-H's remaining TODOs.
+
+## Architecture
+
+The following diagram illustrates the network and data flow between the `usbip-gui` Client and Server modes across Windows and Linux environments.
+
+A key architectural difference to note is how the server daemon is managed depending on the operating system:
+- **Linux:** The `usbip-gui` explicitly starts, stops, and manages the lifecycle of the `usbipd` daemon whenever the server is started or restarted.
+- **Windows:** The underlying `usbipd-win` tool installs itself as a persistent background Windows Service. The GUI does not start or stop this background service directly; it merely interfaces with it to bind and unbind devices.
+
+```mermaid
+flowchart BT
+    subgraph ClientHost ["Client Machine (Windows or Linux)"]
+        direction TB
+        CGUI["usbip-gui Client Tab"]
+        CTUN("ssl_tunnel.py Client<br/>Listens on Local Port 40000-50000")
+        CCLI["usbip.exe / usbip CLI"]
+
+        CGUI -- "Executes list/attach/detach" --> CCLI
+        CGUI -. "Spawns (Secure Mode - Default)" .-> CTUN
+        CCLI <-->|"Connects (Secure Mode - Default)"| CTUN
+    end
+
+    subgraph Network ["Network"]
+        SECURE(("Secure SSL/TLS<br/>(Default)"))
+        INSECURE(("Insecure TCP<br/>(Optional/Disabled)"))
+    end
+
+    CTUN <-->|"Encrypted Connection"| SECURE
+    CCLI <-->|"Connects (Insecure Mode)"| INSECURE
+
+    subgraph ServerLin ["Server Machine (Linux)"]
+        direction TB
+        LGUI["usbip-gui Server Tab"]
+        LTUN("ssl_tunnel.py Server<br/>Listens on Port 3240")
+        LCLI["usbip CLI"]
+        LDAEMON["usbipd Daemon<br/>Listens on 13240 (Secure)<br/>or 3240 (Insecure)"]
+
+        LGUI -- "Executes bind/unbind" --> LCLI
+        LGUI -- "Starts / Stops" --> LDAEMON
+        LGUI -. "Spawns (Secure Mode - Default)" .-> LTUN
+        LTUN <-->|"Forwards Decrypted Traffic"| LDAEMON
+    end
+
+    subgraph ServerWin ["Server Machine (Windows)"]
+        direction TB
+        WGUI["usbip-gui Server Tab"]
+        WTUN("ssl_tunnel.py Server<br/>Listens on Port 3241")
+        WCLI["usbipd.exe CLI"]
+        WDAEMON["usbipd-win Service<br/>Listens on 3240"]
+
+        WGUI -- "Executes bind/unbind" --> WCLI
+        WGUI -. "Spawns (Secure Mode - Default)" .-> WTUN
+        WTUN <-->|"Forwards Decrypted Traffic"| WDAEMON
+    end
+
+    SECURE <-->|"Port 3240"| LTUN
+    SECURE <-->|"Port 3241"| WTUN
+
+    INSECURE <-->|"Direct Port 3240"| LDAEMON
+    INSECURE <-->|"Direct Port 3240"| WDAEMON
+```
+
+Figure 0: Overview Diagram
 
 ## Screenshots
 ![screenshot of usbip_manager_v1.3.0_en_server](screenshots/usbip_manager_v1.3.0_en_server.png)
