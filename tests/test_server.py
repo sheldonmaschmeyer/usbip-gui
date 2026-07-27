@@ -1,5 +1,6 @@
 """Tests for the server tab."""
 
+import sys
 from unittest.mock import MagicMock, patch
 
 from usbip_gui.gui.server import (
@@ -169,9 +170,11 @@ def test_refresh_local(mock_list: MagicMock, mock_item: MagicMock):
     tab = MagicMock()
     ServerTab.refresh_local(tab)
     tab.local_listbox.clear.assert_called_once()
-    mock_item.assert_called_once_with(
-        tab.local_listbox, ["1-1", "Bound", "Man", "Desc", "1234:5678"]
-    )
+    expected = ["1-1", "Bound", "Man"]
+    if sys.platform == "win32":
+        expected.append("")
+    expected.extend(["Desc", "1234:5678"])
+    mock_item.assert_called_once_with(tab.local_listbox, expected)
     assert tab.local_listbox.addTopLevelItem.called
 
     with patch("usbip_gui.gui.server.sys.platform", "win32"):
@@ -292,7 +295,7 @@ def test_parse_local_list_bound(
 def test_server_ui_errors(mock_local: MagicMock):
     """Test server ui errors."""
 
-    mock_local.return_value = [("a", "b", "c", "d")]
+    mock_local.return_value = [("a", "b", "c", "d", "e")]
     server_tab = ServerTab(None)
 
     with patch.object(

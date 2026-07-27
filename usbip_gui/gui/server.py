@@ -45,13 +45,16 @@ t = get_translator("server")
 def local_device_columns() -> List[str]:
     """Column headers for the local device tree, for the active language."""
     # pylint: disable=duplicate-code
-    return [
+    cols = [
         t("Bus ID"),
         t("State"),
         t("Manufacturer"),
         t("Description"),
         t("VID : PID"),
     ]
+    if sys.platform == "win32":
+        cols.insert(4, t("Windows Driver"))
+    return cols
 
 
 def init_usbip_server(
@@ -377,17 +380,26 @@ class ServerTab(QWidget):
         self.local_listbox.clear()
         on_windows = sys.platform == "win32"
         for device in local_devices:
-            item = SortableTreeWidgetItem(
-                self.local_listbox, [str(d) for d in device]
-            )
+            item_data = [str(d) for d in device]
+            if on_windows:
+                item_data.insert(4, item_data[3])
+                item_data[3] = ""
+
+            item = SortableTreeWidgetItem(self.local_listbox, item_data)
             self.local_listbox.addTopLevelItem(item)
 
             bus_id = device[0]
             description = device[3]
+            vid_pid = device[4]
 
             if on_windows or is_unknown_product(description):
                 enrich_device_item(
-                    self._item_updater, item, bus_id, on_windows, description
+                    self._item_updater,
+                    item,
+                    bus_id,
+                    on_windows,
+                    vid_pid,
+                    description,
                 )
 
         for i in range(len(local_device_columns())):

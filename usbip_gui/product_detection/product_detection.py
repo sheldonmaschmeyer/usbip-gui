@@ -12,6 +12,7 @@ from PyQt6.QtCore import QObject, pyqtSignal
 
 from usbip_gui.common import SortableTreeWidgetItem, run_elevated
 from .heuristics import is_generic_manufacturer
+from .usb_ids import get_device_description
 
 
 def is_unknown_product(description: str) -> bool:
@@ -123,6 +124,7 @@ def enrich_device_item(
     item: SortableTreeWidgetItem,
     bus_id: str,
     on_windows: bool,
+    vid_pid: str = "",
     original_description: str = "",
     manufacturer_col: int = 2,
     description_col: int = 3,
@@ -133,11 +135,15 @@ def enrich_device_item(
         try:
             manufacturer, product = read_local_usb_descriptor_details(bus_id)
         except OSError:
-            return
+            manufacturer, product = "", ""
 
         if on_windows:
-            # If the registry manufacturer is generic, guess from
-            # the usbipd description
+            db_mfg, db_prod = get_device_description(vid_pid)
+            if db_prod:
+                product = db_prod
+            if db_mfg:
+                manufacturer = db_mfg
+
             if is_generic_manufacturer(manufacturer):
                 first_word = original_description.split(" ")[0]
                 if first_word.lower() not in (
@@ -148,8 +154,6 @@ def enrich_device_item(
                 ):
                     manufacturer = first_word
 
-            # If the usbipd description starts with the manufacturer,
-            # it's highly detailed
             if (
                 original_description
                 and manufacturer
@@ -165,10 +169,13 @@ def enrich_device_item(
                 part for part in (manufacturer, product) if part
             ).strip()
 
-        if manufacturer:
-            item_updater.update.emit(item, manufacturer_col, manufacturer)
-        if product:
-            item_updater.update.emit(item, description_col, product)
+        try:
+            if manufacturer:
+                item_updater.update.emit(item, manufacturer_col, manufacturer)
+            if product:
+                item_updater.update.emit(item, description_col, product)
+        except RuntimeError:  # pragma: no cover
+            pass
 
     threading.Thread(target=_do_lookup, daemon=True).start()
 
@@ -190,6 +197,13 @@ def enrich_remote_device_item(
         reg_manufacturer, reg_product = (
             read_windows_registry_usb_descriptor_details(vid_pid)
         )
+
+        db_mfg, db_prod = get_device_description(vid_pid)
+        if db_prod:
+            reg_product = db_prod
+        if db_mfg:
+            reg_manufacturer = db_mfg
+
         if not reg_manufacturer and not reg_product:
             return
 
@@ -205,11 +219,14 @@ def enrich_remote_device_item(
         ):
             reg_product = reg_product.split(",", maxsplit=1)[0].strip()
 
-        if reg_manufacturer:
-            item_updater.update.emit(
-                item, manufacturer_col, reg_manufacturer.strip(",")
-            )
-        if reg_product:
-            item_updater.update.emit(item, description_col, reg_product)
+        try:
+            if reg_manufacturer:
+                item_updater.update.emit(
+                    item, manufacturer_col, reg_manufacturer.strip(",")
+                )
+            if reg_product:
+                item_updater.update.emit(item, description_col, reg_product)
+        except RuntimeError:  # pragma: no cover
+            pass
 
     threading.Thread(target=_do_lookup, daemon=True).start()

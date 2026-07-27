@@ -3,6 +3,7 @@
 # pylint: disable=duplicate-code, too-many-lines
 
 import subprocess
+import sys
 from pathlib import PurePosixPath
 from types import TracebackType
 from typing import Literal, Type
@@ -21,6 +22,14 @@ from usbip_gui.gui.client import (
     attach_remote_usb,
     detach_remote_usb,
 )
+
+
+@patch("usbip_gui.gui.client.sys")
+def test_resolve_usbip_client_executable_linux(mock_sys: MagicMock):
+    """Test linux executable resolution."""
+    mock_sys.platform = "linux"
+    resolve_exe = client_mod.__dict__["_resolve_usbip_client_executable"]
+    assert resolve_exe() == "usbip"
 
 
 @patch("usbip_gui.gui.client.sys")
@@ -359,15 +368,43 @@ def test_get_or_create_client_tunnel_auth_fail(
     mock_error.assert_called_once()
 
 
+@patch("usbip_gui.gui.client._resolve_usbip_client_executable")
 @patch("usbip_gui.gui.client.get_or_create_client_tunnel")
 @patch("usbip_gui.gui.client.subprocess.run")
-def test_list_remote_usb(mock_run: MagicMock, mock_tunnel: MagicMock):
+def test_list_remote_usb(
+    mock_run: MagicMock, mock_tunnel: MagicMock, mock_resolve_usbip: MagicMock
+):
     """Test list remote usb."""
+    mock_resolve_usbip.return_value = "usbip"
     mock_tunnel.return_value = ("127.0.0.1", 1234)
     mock_run.return_value.stdout = "1-1: Man : Desc (00:00)"
-    res = list_remote_usb("host", 1234)
-    assert len(res) == 1
-    mock_run.assert_called_once()
+
+    with patch("usbip_gui.gui.client.sys.platform", "linux"):
+        res = list_remote_usb("host", 1234)
+        assert len(res) == 1
+        mock_run.assert_called_with(
+            [
+                "pkexec",
+                "usbip",
+                "--tcp-port",
+                "1234",
+                "list",
+                "--remote=127.0.0.1",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    with patch("usbip_gui.gui.client.sys.platform", "win32"):
+        res = list_remote_usb("host", 1234)
+        assert len(res) == 1
+        mock_run.assert_called_with(
+            ["usbip", "--tcp-port", "1234", "list", "--remote=127.0.0.1"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
 
     mock_tunnel.return_value = ("", 0)
     res = list_remote_usb("host", 1234)
@@ -380,14 +417,24 @@ def test_list_attached_usb(mock_resolve_usbip: MagicMock, mock_run: MagicMock):
     """Test list attached usb."""
     mock_resolve_usbip.return_value = "usbip"
     mock_run.return_value.stdout = ""
+
     with patch("usbip_gui.gui.client.sys.platform", "linux"):
         list_attached_usb()
-    mock_run.assert_called_with(
-        ["pkexec", "usbip", "port"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+        mock_run.assert_called_with(
+            ["pkexec", "usbip", "port"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    with patch("usbip_gui.gui.client.sys.platform", "win32"):
+        list_attached_usb()
+        mock_run.assert_called_with(
+            ["usbip", "port"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
 
 
 @patch("usbip_gui.gui.client.get_or_create_client_tunnel")
@@ -454,10 +501,11 @@ def test_refresh_remote(
     tab.remote_port_input.text.return_value = "1234"
     ClientTab.refresh_remote(tab)
     tab.remote_listbox.clear.assert_called_once()
-    mock_item.assert_called_once_with(
-        tab.remote_listbox,
-        ["localhost", "1234", "1-1", "Detached", "Man", "Desc", "1234:5678"],
-    )
+    expected = ["localhost", "1234", "1-1", "Detached", "Man"]
+    if sys.platform == "win32":
+        expected.append("")
+    expected.extend(["Desc", "1234:5678"])
+    mock_item.assert_called_once_with(tab.remote_listbox, expected)
 
     with patch("usbip_gui.gui.client.sys.platform", "win32"):
         with patch(
@@ -816,8 +864,8 @@ def test_get_or_create_client_tunnel_kill(
 def test_client_ui_errors(mock_attached: MagicMock, mock_remote: MagicMock):
     """Test client ui errors."""
 
-    mock_remote.return_value = [("a", "b", "c")]
-    mock_attached.return_value = [("a", 1, "b", "c", "d")]
+    mock_remote.return_value = [("a", "b", "c", "d")]
+    mock_attached.return_value = [("a", 1, "b", "c", "d", "e")]
     parent = None
     client_tab = ClientTab(parent)
 

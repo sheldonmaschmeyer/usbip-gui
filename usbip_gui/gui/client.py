@@ -137,7 +137,7 @@ def _detect_windows_attach_bus_option(exe: str) -> str:
 def device_columns() -> List[str]:
     """Column headers for the remote device tree, for the active language."""
     # pylint: disable=duplicate-code
-    return [
+    cols = [
         t("Host"),
         t("Port"),
         t("Bus ID"),
@@ -146,6 +146,9 @@ def device_columns() -> List[str]:
         t("Description"),
         t("VID : PID"),
     ]
+    if sys.platform == "win32":
+        cols.insert(6, t("Windows Driver"))
+    return cols
 
 
 def parse_remote_list(text: str) -> List[Tuple[str, str, str, str]]:
@@ -621,18 +624,20 @@ class ClientTab(QWidget):
                 att = attached_by_busid.pop(r_bus_id)
                 local_port = att[1]
 
-            item = SortableTreeWidgetItem(
-                self.remote_listbox,
-                [
-                    server_ip,
-                    str(port),
-                    r_bus_id,
-                    status,
-                    manufacturer,
-                    description,
-                    vid_pid,
-                ],
-            )
+            item_data = [
+                server_ip,
+                str(port),
+                r_bus_id,
+                status,
+                manufacturer,
+                description,
+                vid_pid,
+            ]
+            if sys.platform == "win32":
+                item_data.insert(6, description)
+                item_data[5] = ""
+
+            item = SortableTreeWidgetItem(self.remote_listbox, item_data)
             item.setData(0, Qt.ItemDataRole.UserRole, local_port)
             self.remote_listbox.addTopLevelItem(item)
 
@@ -660,18 +665,20 @@ class ClientTab(QWidget):
             if ":" in host:
                 display_host, display_port = host.split(":", 1)
 
-            item = SortableTreeWidgetItem(
-                self.remote_listbox,
-                [
-                    display_host,
-                    display_port,
-                    a_bus_id,
-                    status,
-                    manufacturer,
-                    description,
-                    vid_pid,
-                ],
-            )
+            item_data = [
+                display_host,
+                display_port,
+                a_bus_id,
+                status,
+                manufacturer,
+                description,
+                vid_pid,
+            ]
+            if sys.platform == "win32":
+                item_data.insert(6, description)
+                item_data[5] = ""
+
+            item = SortableTreeWidgetItem(self.remote_listbox, item_data)
             item.setData(0, Qt.ItemDataRole.UserRole, att_port)
             self.remote_listbox.addTopLevelItem(item)
 

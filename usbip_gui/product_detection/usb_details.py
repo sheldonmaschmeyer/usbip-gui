@@ -21,7 +21,7 @@ import usb.util
 
 PROJECT_ROOT = str(Path(__file__).resolve().parent.parent.parent)
 if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
+    sys.path.insert(0, PROJECT_ROOT)  # pragma: no cover
 
 # pylint: disable=wrong-import-position
 from usbip_gui.product_detection.heuristics import (  # noqa: E402

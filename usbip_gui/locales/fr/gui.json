@@ -2,5 +2,6 @@
     "USB/IP Peer": "Pair USB/IP",
     "Server (Local USB Devices)": "Serveur (Périphériques USB Locaux)",
     "Client (Remote USB Devices)": "Client (Périphériques USB Distants)",
-    "USB/IP Manager": "Gestionnaire USB/IP"
+    "USB/IP Manager": "Gestionnaire USB/IP",
+    "Windows Driver": "Pilote Windows"
 }
