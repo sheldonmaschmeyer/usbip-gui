@@ -140,21 +140,54 @@ def test_enrich_device_item():
         ) as mock_read:
             # Test normal
             mock_read.return_value = ("Man", "Prod")
-            enrich_device_item(updater, item, "1-1", False, "Original", 2, 3)
+            enrich_device_item(
+                updater, item, "1-1", False, "", "Original", 2, 3
+            )
             updater.update.emit.assert_any_call(item, 2, "Man")
             updater.update.emit.assert_any_call(item, 3, "Man Prod")
+
+            # Test oserror returns early
+            mock_read.side_effect = OSError
+            enrich_device_item(
+                updater, item, "1-1", False, "", "Original", 2, 3
+            )
+
+            # Reset side effect
+            mock_read.side_effect = None
 
             # Test generic on windows
             mock_read.return_value = ("Generic", "Prod")
             enrich_device_item(
-                updater, item, "1-1", True, "Apple iPhone", 2, 3
+                updater, item, "1-1", True, "", "Apple iPhone", 2, 3
             )
             updater.update.emit.assert_any_call(item, 2, "Apple")
             updater.update.emit.assert_any_call(item, 3, "Apple iPhone")
 
+            # Test generic on windows with db fallback
+            mock_read.return_value = ("Generic", "Prod")
+            with patch(
+                "usbip_gui.product_detection.product_detection"
+                ".get_device_description"
+            ) as m_get:
+                m_get.return_value = ("DbMfg", "DbProd")
+                enrich_device_item(
+                    updater,
+                    item,
+                    "1-1",
+                    True,
+                    "1234:5678",
+                    "Apple iPhone",
+                    2,
+                    3,
+                )
+                updater.update.emit.assert_any_call(item, 2, "DbMfg")
+                updater.update.emit.assert_any_call(item, 3, "DbProd")
 
-def test_enrich_remote_device_item():
+
+@patch("usbip_gui.product_detection.product_detection.get_device_description")
+def test_enrich_remote_device_item(mock_get_db: MagicMock):
     """Test enrich_remote_device_item."""
+    mock_get_db.return_value = ("", "")
     item = MagicMock()
     updater = MagicMock()
 
@@ -184,11 +217,34 @@ def test_enrich_remote_device_item():
 
                 # Test generic
                 mock_read.return_value = ("Generic", "Prod")
+                mock_get_db.return_value = ("", "")
                 enrich_remote_device_item(
                     updater, item, "1234:5678", "Original", 2, 3
                 )
                 updater.update.emit.assert_any_call(item, 2, "Original")
                 updater.update.emit.assert_any_call(item, 3, "Prod")
+
+                # Test generic with db fallback
+                mock_read.return_value = ("Generic", "Prod")
+                mock_get_db.return_value = ("DbMfg", "DbProd")
+                enrich_remote_device_item(
+                    updater, item, "1234:5678", "Original", 2, 3
+                )
+                updater.update.emit.assert_any_call(item, 2, "DbMfg")
+                updater.update.emit.assert_any_call(item, 3, "DbProd")
+
+                # Test empty reg and db fallback empty
+                mock_read.return_value = ("", "")
+                updater.update.emit.reset_mock()
+                with patch(
+                    "usbip_gui.product_detection.product_detection"
+                    ".get_device_description"
+                ) as m_get:
+                    m_get.return_value = ("", "")
+                    enrich_remote_device_item(
+                        updater, item, "1234:5678", "Original", 2, 3
+                    )
+                    updater.update.emit.assert_not_called()
 
 
 def test_parse_bus_id():
@@ -350,19 +406,23 @@ def test_enrich_device_item_branches():
         ) as mock_read:
             # Test oserror returns early
             mock_read.side_effect = OSError
-            enrich_device_item(updater, item, "1-1", False, "Original", 2, 3)
+            enrich_device_item(
+                updater, item, "1-1", False, "", "Original", 2, 3
+            )
 
             # Test generic product fallback to original
             mock_read.side_effect = None
             mock_read.return_value = ("Man", "")
             enrich_device_item(
-                updater, item, "1-1", True, "DetailedDesc", 2, 3
+                updater, item, "1-1", True, "", "DetailedDesc", 2, 3
             )
             updater.update.emit.assert_any_call(item, 3, "DetailedDesc")
 
 
-def test_enrich_remote_device_item_branches():
+@patch("usbip_gui.product_detection.product_detection.get_device_description")
+def test_enrich_remote_device_item_branches(mock_get: MagicMock):
     """Test enrich_remote_device_item edge cases."""
+    mock_get.return_value = ("", "")
     item = MagicMock()
     updater = MagicMock()
 
@@ -419,3 +479,53 @@ def test_main_cli_registry():
             main()
             mock_get.side_effect = Exception("Err")
             main()
+
+
+@patch("sys.platform", "win32")
+def test_read_windows_registry_usb_descriptor_details_extra():
+    """Test read_windows_registry_usb_descriptor_details branches."""
+
+    # Test not win32 or invalid vid_pid
+    with patch("sys.platform", "linux"):
+        assert read_windows_registry_usb_descriptor_details("1234:5678") == (
+            "",
+            "",
+        )
+    assert read_windows_registry_usb_descriptor_details("") == ("", "")
+    assert read_windows_registry_usb_descriptor_details("invalid") == ("", "")
+
+    with patch(
+        "usbip_gui.product_detection.product_detection.subprocess.run"
+    ) as m_run:
+        m_run.return_value.returncode = 1
+        assert read_windows_registry_usb_descriptor_details("1234:5678") == (
+            "",
+            "",
+        )
+
+        m_run.return_value.returncode = 0
+        m_run.return_value.stdout = ""
+        assert read_windows_registry_usb_descriptor_details("1234:5678") == (
+            "",
+            "",
+        )
+
+        m_run.return_value.stdout = "invalid json"
+        assert read_windows_registry_usb_descriptor_details("1234:5678") == (
+            "",
+            "",
+        )
+
+        m_run.return_value.stdout = '{"error": "some error"}'
+        assert read_windows_registry_usb_descriptor_details("1234:5678") == (
+            "",
+            "",
+        )
+
+        m_run.return_value.stdout = (
+            '{"manufacturer": "TestMfg", "product": "TestProd"}'
+        )
+        assert read_windows_registry_usb_descriptor_details("1234:5678") == (
+            "TestMfg",
+            "TestProd",
+        )
