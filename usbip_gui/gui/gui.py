@@ -21,6 +21,7 @@ from usbip_gui.common import (
 from .server import ServerTab
 from .client import ClientTab
 from .menu import create_main_menu
+from .menu.debug import setup_interceptors
 
 t = get_translator("gui")
 
@@ -163,6 +164,7 @@ class UsbIpGui:
 
 def start_app():
     """Start app."""
+    setup_interceptors()
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
     icon_path = (

@@ -135,8 +135,9 @@ def test_run_elevated_windows(mock_win_dll: MagicMock):
 
     info = mock_shell32.ShellExecuteExW.call_args[0][0].contents
     assert info.lpVerb == "runas"
-    assert info.lpFile == "usbipd"
-    assert info.lpParameters == "bind --busid 1-1"
+    assert info.lpFile == "cmd.exe"
+    assert info.lpParameters.startswith('/c "usbipd bind --busid 1-1 > "')
+    assert info.lpParameters.endswith('" 2>&1"')
     mock_kernel32.WaitForSingleObject.assert_called_once()
     mock_kernel32.CloseHandle.assert_called_once()
     assert result.returncode == 0
@@ -199,6 +200,52 @@ def test_run_elevated_windows_nonzero_exit_code_message(
     assert result.returncode == 106
     assert "elevated process exited" in result.stderr.lower()
     assert "106" in result.stderr
+
+
+@patch("usbip_gui.common.privilege._win_last_error")
+@patch("usbip_gui.common.privilege._win_dll")
+@patch("usbip_gui.common.privilege.os.remove")
+def test_run_elevated_windows_cancelled_oserror(
+    mock_remove: MagicMock, mock_win_dll: MagicMock, mock_last_error: MagicMock
+):
+    """Test run_elevated handles OSError on cleanup if UAC cancelled."""
+    mock_shell32 = MagicMock()
+    mock_kernel32 = MagicMock()
+    mock_win_dll.side_effect = _fake_win_dll(mock_shell32, mock_kernel32)
+    mock_shell32.ShellExecuteExW.return_value = 0
+    mock_last_error.return_value = 1223
+    mock_remove.side_effect = OSError("Mocked OSError")
+
+    with patch("usbip_gui.common.privilege.sys.platform", "win32"):
+        result = run_elevated(["usbipd", "bind", "--busid", "1-1"])
+
+    assert result.returncode == 1223
+
+
+@patch("usbip_gui.common.privilege._win_dll")
+@patch("usbip_gui.common.privilege.os.remove")
+@patch("builtins.open")
+def test_run_elevated_windows_with_output(
+    mock_open: MagicMock, mock_remove: MagicMock, mock_win_dll: MagicMock
+):
+    """Test run_elevated captures stdout and handles OSError during cleanup."""
+    mock_shell32 = MagicMock()
+    mock_kernel32 = MagicMock()
+    mock_win_dll.side_effect = _fake_win_dll(mock_shell32, mock_kernel32)
+    mock_shell32.ShellExecuteExW.return_value = 1
+    mock_kernel32.GetExitCodeProcess.side_effect = _fake_get_exit_code
+
+    mock_remove.side_effect = OSError("Mocked OSError")
+
+    mock_file = MagicMock()
+    mock_file.__enter__.return_value.read.return_value = "Mocked stdout\n"
+    mock_open.return_value = mock_file
+
+    with patch("usbip_gui.common.privilege.sys.platform", "win32"):
+        result = run_elevated(["usbipd", "bind", "--busid", "1-1"])
+
+    assert result.returncode == 0
+    assert result.stdout == "Mocked stdout\n"
 
 
 def test_cleanup_tunnels_no_processes():
