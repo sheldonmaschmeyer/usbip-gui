@@ -7,6 +7,8 @@
     - [How it works](#how-it-works)
     - [Connecting over the Internet](#connecting-over-the-internet)
   - [Windows Setup](#windows-setup)
+    - [Method 1: The Installer Wizard (Recommended for End-Users)](#method-1-the-installer-wizard-recommended-for-end-users)
+    - [Method 2: The Developer Script (`.bat`)](#method-2-the-developer-script-bat)
   - [Host System Requirements](#host-system-requirements)
   - [Local Installation (Without Docker)](#local-installation-without-docker)
   - [Development Commands](#development-commands)
@@ -116,17 +118,54 @@ To securely share a USB device across the internet:
 
 ## Windows Setup
 
-1. Run the installer script from PowerShell or double-click on it:
+You can install USB/IP Manager on Windows using either the standard Installer
+Wizard or a portable Developer Script.
+
+### Method 1: The Installer Wizard (Recommended for End-Users)
+The standard way to install USB/IP Manager is by downloading and running the
+`USBIP_Manager_Setup.exe` file from the
+[Releases](https://github.com/sheldonmaschmeyer/usbip-gui/releases) page.
+
+**Pros:**
+- Complete, self-contained single `.exe` file (no need to install Git or clone
+  this repository).
+- Standard setup wizard with a clean graphical interface.
+- Automatically installs missing dependencies, drivers, and creates
+  desktop/start-menu shortcuts.
+- Fully integrates into Windows "Add/Remove Programs" for easy, clean
+  uninstallation.
+
+**Cons:**
+- Requires compiling the `.iss` file using Inno Setup if you want to build the
+  `.exe` yourself from source.
+
+### Method 2: The Developer Script (`.bat`)
+If you have already cloned the repository and want to run the application in a
+portable, developer-friendly way, you can use the included batch script.
+
+1. Open PowerShell and navigate to your cloned repository.
+2. Run the installer script:
    ```powershell
-   win_installers/install_usbip_on_windows.bat
+   win_installers\install_usbip_on_windows.bat
    ```
-2. (Optional) Reboot the computer.
-3. Run the app:
-   - Use the **USBIP Manager** desktop icon, from start menu, or
-   - Run from the repository directory:
-     ```powershell
-     pixi run usbip
-     ```
+3. (Optional) Reboot the computer if the USB drivers were newly installed.
+4. Launch the app using the generated desktop shortcut, or run it manually:
+   ```powershell
+   pixi run usbip
+   ```
+
+**Pros:**
+- Installs all dependencies "in-place", turning your cloned repository directly
+  into the running application.
+- Extremely lightweight.
+- Perfect for developers who want to modify the source code and immediately test
+  it.
+
+**Cons:**
+- Requires you to manually clone the repository first.
+- Does not create a formal "Add/Remove Programs" entry. (You must run
+  `win_installers\uninstall_usbip_on_windows.bat` manually to clean up the
+  environment and drivers).
 
 ## Host System Requirements
 
@@ -176,7 +215,7 @@ developing or contributing, the following commands are available:
 - [x] Migrate tkinter to Qt.
 - [x] Windows compatibility.
 - [x] Windows installer.
-- [ ] Fully packaged Inno Setup.
+- [x] Fully packaged Inno Setup.
 - [x] Cross-architecture (ARM and x86) production testing.
 - [x] Look at K-Francis-H's remaining TODOs.
 

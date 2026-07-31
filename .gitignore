@@ -6,3 +6,5 @@ build/
 htmlcov/
 .vscode
 usb.ids
+
+*.exe
