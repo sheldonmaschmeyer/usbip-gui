@@ -5,6 +5,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from ctypes import wintypes
 from typing import List
 
@@ -60,8 +61,13 @@ def run_elevated_windows(
     cmd: List[str],
 ) -> "subprocess.CompletedProcess[str]":
     """Run `cmd` elevated on Windows, prompting via a UAC consent dialog."""
-    exe, *args = cmd
-    params = subprocess.list2cmdline(args)
+    exe = cmd[0]
+
+    fd, temp_path = tempfile.mkstemp(suffix=".log")
+    os.close(fd)
+
+    full_cmd = subprocess.list2cmdline(cmd)
+    params = f'/c "{full_cmd} > "{temp_path}" 2>&1"'
     working_dir = os.path.dirname(exe) or None
 
     info = _ShellExecuteInfoW(
@@ -69,7 +75,7 @@ def run_elevated_windows(
         fMask=_SEE_MASK_NOCLOSEPROCESS | _SEE_MASK_FLAG_NO_UI,
         hwnd=None,
         lpVerb="runas",
-        lpFile=exe,
+        lpFile="cmd.exe",
         lpParameters=params,
         lpDirectory=working_dir,
         nShow=_SW_HIDE,
@@ -85,6 +91,12 @@ def run_elevated_windows(
             stderr = "Elevation request was cancelled by the user."
         else:
             stderr = f"Failed to launch elevated process (error {error})."
+
+        try:
+            os.remove(temp_path)
+        except OSError:
+            pass
+
         return subprocess.CompletedProcess(
             args=cmd, returncode=error or 1, stdout="", stderr=stderr
         )
@@ -94,16 +106,27 @@ def run_elevated_windows(
     kernel32.GetExitCodeProcess(info.hProcess, ctypes.pointer(exit_code))
     kernel32.CloseHandle(info.hProcess)
 
+    stdout_content = ""
+    try:
+        with open(temp_path, "r", encoding="utf-8", errors="replace") as f:
+            stdout_content = f.read()
+        os.remove(temp_path)
+    except OSError:
+        pass
+
     stderr = ""
     if exit_code.value != 0:
         stderr = (
-            "Elevated process exited with error code " f"{exit_code.value}."
+            "Elevated process exited with error code " f"{exit_code.value}.\n"
         )
+
+    if stdout_content:
+        stderr += stdout_content
 
     return subprocess.CompletedProcess(
         args=cmd,
         returncode=exit_code.value,
-        stdout="",
+        stdout=stdout_content,
         stderr=stderr,
     )
 

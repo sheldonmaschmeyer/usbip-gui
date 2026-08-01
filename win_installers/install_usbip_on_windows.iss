@@ -15,7 +15,7 @@
 ; Application Metadata
 ; ------------------------------------------------------------------------------
 AppName=USB/IP Manager
-AppVersion=1.6.0
+AppVersion=1.7.0
 AppPublisher=Sheldon Maschmeyer
 AppPublisherURL=https://maschmeyer.ca
 AppSupportURL=https://github.com/sheldonmaschmeyer/usbip-gui

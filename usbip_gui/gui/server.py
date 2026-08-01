@@ -207,9 +207,16 @@ def bind_local_usb(bus_id: str):
     else:
         cmd = ["usbip", "bind", "--busid=" + bus_id]
 
+    print(f"DEBUG: Executing elevated command: {' '.join(cmd)}", flush=True)
     result = run_elevated(cmd)
-    print(result.stdout)
-    print(result.stderr)
+    if result.stdout:
+        print(f"stdout: {result.stdout}", flush=True)
+    if result.stderr:
+        print(f"stderr: {result.stderr}", flush=True)
+    print(
+        f"DEBUG: Command finished with exit code {result.returncode}",
+        flush=True,
+    )
     return result
 
 
@@ -220,9 +227,16 @@ def unbind_local_usb(bus_id: str):
     else:
         cmd = ["usbip", "unbind", "--busid=" + bus_id]
 
+    print(f"DEBUG: Executing elevated command: {' '.join(cmd)}", flush=True)
     result = run_elevated(cmd)
-    print(result.stdout)
-    print(result.stderr)
+    if result.stdout:
+        print(f"stdout: {result.stdout}", flush=True)
+    if result.stderr:
+        print(f"stderr: {result.stderr}", flush=True)
+    print(
+        f"DEBUG: Command finished with exit code {result.returncode}",
+        flush=True,
+    )
     return result
 
 

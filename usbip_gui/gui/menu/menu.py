@@ -8,6 +8,7 @@ from usbip_gui.typings import connect_signal, add_action
 from usbip_gui.common import get_translator
 from .about import show_about_dialog
 from .language_switcher import toggle_language
+from .debug import show_debug_window
 
 t = get_translator("menu")
 
@@ -37,6 +38,12 @@ def create_main_menu(app: "UsbIpGui"):
     # View Menu
     view_menu = menubar.addMenu(t("View"))
     assert view_menu is not None
+
+    debug_action = QAction(t("Debug Window"), app.root)
+    connect_signal(debug_action.triggered, lambda: show_debug_window(app.root))
+    add_action(view_menu, debug_action)
+
+    view_menu.addSeparator()
 
     # Visible Tabs Submenu
     tabs_menu = view_menu.addMenu(t("Visible Tabs"))
