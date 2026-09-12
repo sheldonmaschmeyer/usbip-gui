@@ -1,6 +1,6 @@
 """Tests for the client tab."""
 
-# pylint: disable=duplicate-code, too-many-lines
+# pylint: disable=duplicate-code, too-many-lines, too-many-statements
 
 import subprocess
 import sys
@@ -9,7 +9,7 @@ from types import TracebackType
 from typing import Callable, Literal, Type
 
 from unittest.mock import MagicMock, mock_open, patch
-from PyQt6.QtWidgets import QMessageBox
+from PyQt6.QtWidgets import QMessageBox, QLineEdit
 import usbip_gui.gui.client as client_mod
 from usbip_gui.common import tunnel_state
 
@@ -145,6 +145,18 @@ def test_client_tab_init(
     assert tab.remote_listbox is not None
 
 
+def test_client_tab_toggle_show_password():
+    """Test toggle_show_password toggles EchoMode."""
+    tab = ClientTab(None)
+    assert tab.remote_password_input.echoMode() == QLineEdit.EchoMode.Password
+
+    tab.remote_show_password_checkbox.setChecked(True)
+    assert tab.remote_password_input.echoMode() == QLineEdit.EchoMode.Normal
+
+    tab.remote_show_password_checkbox.setChecked(False)
+    assert tab.remote_password_input.echoMode() == QLineEdit.EchoMode.Password
+
+
 def test_parse_remote_list():
     """Test parsing of remote USB devices list."""
     text = (
@@ -158,6 +170,9 @@ def test_parse_remote_list():
     # Test no exportable
     empty = parse_remote_list("no exportable devices found on host")
     assert not empty
+
+    # Test invalid busid format
+    assert not parse_remote_list("invalid-bus: M : P : (1234:5678)")
 
     # Test unknown product on win32
     with patch("usbip_gui.gui.client.sys.platform", "win32"):
@@ -439,6 +454,7 @@ def test_list_attached_usb(mock_resolve_usbip: MagicMock, mock_run: MagicMock):
         )
 
 
+@patch("usbip_gui.gui.client.operations.sys")
 @patch("usbip_gui.gui.client.operations.get_or_create_client_tunnel")
 @patch("usbip_gui.gui.client.operations._resolve_usbip_client_executable")
 @patch("usbip_gui.gui.client.operations.run_elevated")
@@ -446,8 +462,10 @@ def test_attach_remote_usb(
     mock_run_elevated: MagicMock,
     mock_resolve_usbip: MagicMock,
     mock_tunnel: MagicMock,
+    mock_sys: MagicMock,
 ):
     """Test attach remote usb."""
+    mock_sys.platform = "linux"
     mock_resolve_usbip.return_value = "usbip"
     mock_run_elevated.return_value.returncode = 0
     mock_tunnel.return_value = ("127.0.0.1", 1234)
@@ -730,7 +748,7 @@ def test_get_or_create_client_tunnel_secure_fingerprint_mismatch(
         ),
         patch("builtins.open", mock_open()),
         patch(
-            "usbip_gui.gui.client.tunnels._secure_port_candidates",
+            "usbip_gui.gui.client.tunnels.secure_port_candidates",
             return_value=[3240],
         ),
     ):
@@ -1160,6 +1178,7 @@ def test_attach_remote_usb_win32_collects_diag_output(
     assert "device not available" in result.stderr
 
 
+@patch("usbip_gui.gui.client.operations.sys")
 @patch("usbip_gui.gui.client.operations.get_or_create_client_tunnel")
 @patch("usbip_gui.gui.client.operations._resolve_usbip_client_executable")
 @patch("usbip_gui.gui.client.operations.run_elevated")
@@ -1167,8 +1186,10 @@ def test_attach_remote_usb_secure_retry_target_missing_returns_initial(
     mock_run_elevated: MagicMock,
     mock_resolve_usbip: MagicMock,
     mock_tunnel: MagicMock,
+    mock_sys: MagicMock,
 ):
     """Test secure attach returns initial failure when retry tunnel fails."""
+    mock_sys.platform = "linux"
     mock_resolve_usbip.return_value = "usbip"
     first = subprocess.CompletedProcess(
         args=[], returncode=106, stdout="", stderr=""
@@ -1517,6 +1538,9 @@ def test_client_tab_site_selection_and_cf(
     ):
         tab.populate_site_combo()
         assert tab.remote_site_combo.count() == 3
+        assert tab.remote_site_combo.currentText() == "Cloudflare Client"
+
+        tab.populate_site_combo()
         assert tab.remote_site_combo.currentText() == "Cloudflare Client"
 
     # Test on_sites_updated

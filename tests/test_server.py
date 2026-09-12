@@ -4,6 +4,8 @@ import sys
 from typing import Callable
 from unittest.mock import MagicMock, patch
 
+from PyQt6.QtWidgets import QLineEdit
+
 from usbip_gui.common import tunnel_state
 from usbip_gui.gui.server import (
     ServerTab,
@@ -23,16 +25,38 @@ def test_server_tab_init(_mock_local: MagicMock):
     assert tab.local_listbox is not None
 
 
+def test_server_tab_toggle_show_password():
+    """Test toggle_show_password toggles EchoMode."""
+    with patch("usbip_gui.gui.server.tab.list_local_usb", return_value=[]):
+        tab = ServerTab(None)
+    assert tab.local_password_input.echoMode() == QLineEdit.EchoMode.Password
+
+    tab.local_show_password_checkbox.setChecked(True)
+    assert tab.local_password_input.echoMode() == QLineEdit.EchoMode.Normal
+
+    tab.local_show_password_checkbox.setChecked(False)
+    assert tab.local_password_input.echoMode() == QLineEdit.EchoMode.Password
+
+
 def test_parse_local_list():
     """Test parsing of local USB devices."""
     text = "- busid 1-1 (046d:c52b)\nManufacturer:Desc"
-    rows = parse_local_list(text)
-    assert len(rows) == 1
-    assert rows[0][0] == "1-1"
-    assert rows[0][1] == "Unbound"
-    assert rows[0][2] == "Manufacturer"
-    assert rows[0][3] == "Desc"
-    assert rows[0][4] == "046d:c52b"
+    with patch("os.path.exists", return_value=False):
+        rows = parse_local_list(text)
+        assert len(rows) == 1
+        assert rows[0][0] == "1-1"
+        assert rows[0][1] == "Unbound"
+        assert rows[0][2] == "Manufacturer"
+        assert rows[0][3] == "Desc"
+        assert rows[0][4] == "046d:c52b"
+
+    with (
+        patch("os.path.exists", return_value=True),
+        patch("os.path.islink", return_value=True),
+        patch("os.readlink", return_value="/drivers/usbip-host"),
+    ):
+        rows_bound = parse_local_list(text)
+        assert rows_bound[0][1] == "Bound"
 
     # Test unknown product stripping
     unknown_text = (
@@ -547,6 +571,9 @@ def test_server_tab_site_selection(mock_set: MagicMock):
     ):
         tab.populate_site_combo()
         assert tab.local_site_combo.count() == 3
+        assert tab.local_site_combo.currentText() == "Cloudflare Server"
+
+        tab.populate_site_combo()
         assert tab.local_site_combo.currentText() == "Cloudflare Server"
 
     # Test on_sites_updated

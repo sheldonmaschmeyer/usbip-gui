@@ -34,7 +34,6 @@ from .tunnels import (
     secure_port_candidates,
 )
 
-
 _resolve_usbip_client_executable = resolve_usbip_client_executable
 _reset_client_tunnels_for_host = reset_client_tunnels_for_host
 _detect_windows_attach_bus_option = detect_windows_attach_bus_option

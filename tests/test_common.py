@@ -690,7 +690,7 @@ def test_resolve_cloudflared_executable_env_candidate_linux():
         with patch("os.path.isfile") as mock_isfile:
 
             def is_candidate_path(path: object) -> bool:
-                return "bin/cloudflared" in str(path)
+                return "bin/cloudflared" in str(path).replace("\\", "/")
 
             mock_isfile.side_effect = is_candidate_path
             res = resolve_cloudflared_executable()

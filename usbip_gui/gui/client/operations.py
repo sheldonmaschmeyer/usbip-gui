@@ -17,7 +17,6 @@ from .tunnels import (
     reset_client_tunnels_for_host,
 )
 
-
 _resolve_usbip_client_executable = resolve_usbip_client_executable
 _detect_windows_attach_bus_option = detect_windows_attach_bus_option
 _reset_client_tunnels_for_host = reset_client_tunnels_for_host

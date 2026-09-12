@@ -30,4 +30,4 @@ default = ["dev"]
 usbip = "python -m usbip_gui"
 lint = "python -m flake8 . && python -m pylint . && python -m pyright . && python -m mypy ."
 format = "python -m black ."
-test = { cmd = "PYTHONPATH=. python -m pytest tests/ -v --cov=usbip_gui --cov-report=html --cov-report=term", env = { QT_QPA_PLATFORM = "offscreen" } }
+test = { cmd = "python -m pytest tests/ -v --cov=usbip_gui --cov-report=html --cov-report=term", env = { PYTHONPATH = ".", QT_QPA_PLATFORM = "offscreen" } }

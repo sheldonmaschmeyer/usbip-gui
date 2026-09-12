@@ -19,5 +19,7 @@
     "Success": "Succès",
     "Certificate Check": "Vérification du certificat",
     "Warning": "Avertissement",
-    "insecure_warning_msg": "Il n'est pas recommandé de désactiver le mode Sécurisé sur Internet."
+    "insecure_warning_msg": "Il n'est pas recommandé de désactiver le mode Sécurisé sur Internet.",
+    "Show": "Afficher",
+    "show_password_tooltip": "Afficher ou masquer le mot de passe"
 }

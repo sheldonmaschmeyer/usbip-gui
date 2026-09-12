@@ -76,7 +76,7 @@ class ClientTab(QWidget):
         self.remote_list_label = QLabel(t("Remote USB Devices for "))
         self.remote_ip_input = QLineEdit()
         self.remote_ip_input.setText("127.0.0.1")
-        self.remote_ip_input.setFixedWidth(100)
+        self.remote_ip_input.setFixedWidth(200)
 
         self.remote_port_input = QLineEdit()
         self.remote_port_input.setText(str(USBIPD_PORT))
@@ -90,7 +90,16 @@ class ClientTab(QWidget):
 
         self.remote_password_input = QLineEdit()
         self.remote_password_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self.remote_password_input.setFixedWidth(100)
+        self.remote_password_input.setFixedWidth(180)
+
+        self.remote_show_password_checkbox = QCheckBox(t("Show"))
+        self.remote_show_password_checkbox.setToolTip(
+            t("show_password_tooltip")
+        )
+        connect_signal(
+            self.remote_show_password_checkbox.stateChanged,
+            self.toggle_show_password,
+        )
 
         self.remote_list_refresh_button = QPushButton(t("Refresh"))
         self.remote_list_refresh_button.setToolTip(t("remote_refresh_tooltip"))
@@ -116,10 +125,16 @@ class ClientTab(QWidget):
         self.remote_control_layout.addWidget(self.remote_port_input)
         self.remote_control_layout.addWidget(self.remote_secure_checkbox)
         self.remote_control_layout.addWidget(self.remote_password_input)
-        self.remote_control_layout.addWidget(self.remote_list_refresh_button)
-        self.remote_control_layout.addWidget(self.remote_list_attach_button)
-        self.remote_control_layout.addWidget(self.detach_button)
+        self.remote_control_layout.addWidget(
+            self.remote_show_password_checkbox
+        )
         self.remote_control_layout.addStretch()
+
+        self.remote_actions_layout = QHBoxLayout()
+        self.remote_actions_layout.addWidget(self.remote_list_refresh_button)
+        self.remote_actions_layout.addWidget(self.remote_list_attach_button)
+        self.remote_actions_layout.addWidget(self.detach_button)
+        self.remote_actions_layout.addStretch()
 
         self.populate_site_combo()
 
@@ -139,20 +154,21 @@ class ClientTab(QWidget):
         )
 
         layout.addLayout(self.remote_control_layout)
+        layout.addLayout(self.remote_actions_layout)
         layout.addWidget(self.remote_listbox)
 
     def populate_site_combo(self) -> None:
         """Populate the site dropdown with saved client sites."""
+        saved_sites = load_sites("client")
+        saved_names = {str(site.get("name", "")) for site in saved_sites}
         current_data = self.remote_site_combo.currentData()
-        selected_name = (
-            str(current_data)
-            if current_data
-            else get_selected_site_name("client")
-        )
+        if current_data and str(current_data) in saved_names:
+            selected_name = str(current_data)
+        else:
+            selected_name = get_selected_site_name("client")
         self.remote_site_combo.blockSignals(True)
         self.remote_site_combo.clear()
         self.remote_site_combo.addItem(t("Manual / Direct"), "")
-        saved_sites = load_sites("client")
         selected_idx = 0
         for idx, site in enumerate(saved_sites, start=1):
             name = str(site.get("name", ""))
@@ -162,18 +178,10 @@ class ClientTab(QWidget):
         self.remote_site_combo.setCurrentIndex(selected_idx)
         self.remote_site_combo.blockSignals(False)
 
-    def _populate_site_combo(self) -> None:
-        """Backwards-compatible alias for populate_site_combo."""
-        self.populate_site_combo()
-
     def on_sites_updated(self, site_type: str) -> None:
         """Handle site configuration updates."""
         if site_type == "client":
             self.populate_site_combo()
-
-    def _on_sites_updated(self, site_type: str) -> None:
-        """Backwards-compatible alias for on_sites_updated."""
-        self.on_sites_updated(site_type)
 
     def on_site_selected(self, _index: int) -> None:
         """Handle selection change in site dropdown."""
@@ -199,10 +207,6 @@ class ClientTab(QWidget):
         self.remote_password_input.setText(
             str(pwd_val) if isinstance(pwd_val, str) else ""
         )
-
-    def _on_site_selected(self, index: int) -> None:
-        """Backwards-compatible alias for on_site_selected."""
-        self.on_site_selected(index)
 
     def get_active_cf_settings(
         self,
@@ -238,12 +242,6 @@ class ClientTab(QWidget):
                 )
         return False, "", "", "", ""
 
-    def _get_active_cf_settings(
-        self,
-    ) -> Tuple[bool, str, str, str, str]:
-        """Backwards-compatible alias for get_active_cf_settings."""
-        return self.get_active_cf_settings()
-
     def connect_site(self) -> None:
         """Connect to the selected site and populate remote devices."""
         self.refresh_remote()
@@ -252,6 +250,13 @@ class ClientTab(QWidget):
         """Check secure warning."""
         if state == 0:
             QMessageBox.warning(self, t("Warning"), t("insecure_warning_msg"))
+
+    def toggle_show_password(self, _state: int = 0) -> None:
+        """Toggle remote password visibility between masked and plain text."""
+        if self.remote_show_password_checkbox.isChecked():
+            self.remote_password_input.setEchoMode(QLineEdit.EchoMode.Normal)
+        else:
+            self.remote_password_input.setEchoMode(QLineEdit.EchoMode.Password)
 
     def refresh_remote(self):
         """Refresh remote."""

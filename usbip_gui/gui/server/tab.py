@@ -97,7 +97,16 @@ class ServerTab(QWidget):
 
         self.local_password_input = QLineEdit()
         self.local_password_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self.local_password_input.setFixedWidth(150)
+        self.local_password_input.setFixedWidth(180)
+
+        self.local_show_password_checkbox = QCheckBox(t("Show"))
+        self.local_show_password_checkbox.setToolTip(
+            t("show_password_tooltip")
+        )
+        connect_signal(
+            self.local_show_password_checkbox.stateChanged,
+            self.toggle_show_password,
+        )
 
         self.local_server_restart_button = QPushButton(t("apply_port_restart"))
         self.local_server_restart_button.setToolTip(t("local_restart_tooltip"))
@@ -128,17 +137,17 @@ class ServerTab(QWidget):
         self.local_control_layout1.addWidget(self.local_bind_ip_input)
         self.local_control_layout1.addWidget(self.local_secure_checkbox)
         self.local_control_layout1.addWidget(self.local_password_input)
-        self.local_control_layout1.addWidget(self.local_server_restart_button)
-        self.local_control_layout1.addWidget(
-            self.local_show_fingerprint_button
-        )
-        self.local_control_layout1.addWidget(self.local_regen_cert_button)
+        self.local_control_layout1.addWidget(self.local_show_password_checkbox)
         self.local_control_layout1.addStretch()
 
         self.populate_site_combo()
 
         # Control Frame 2 (actions)
         self.local_actions_layout = QHBoxLayout()
+        self.local_actions_layout.addWidget(self.local_server_restart_button)
+        self.local_actions_layout.addWidget(self.local_show_fingerprint_button)
+        self.local_actions_layout.addWidget(self.local_regen_cert_button)
+
         self.local_list_refresh_button = QPushButton(t("Refresh"))
         self.local_list_refresh_button.setToolTip(t("local_refresh_tooltip"))
         connect_signal(
@@ -185,6 +194,13 @@ class ServerTab(QWidget):
         """Check secure warning."""
         if state == 0:
             QMessageBox.warning(self, t("Warning"), t("insecure_warning_msg"))
+
+    def toggle_show_password(self, _state: int = 0) -> None:
+        """Toggle local password visibility between masked and plain text."""
+        if self.local_show_password_checkbox.isChecked():
+            self.local_password_input.setEchoMode(QLineEdit.EchoMode.Normal)
+        else:
+            self.local_password_input.setEchoMode(QLineEdit.EchoMode.Password)
 
     def show_fingerprint(self):
         """Show fingerprint."""
@@ -247,16 +263,16 @@ class ServerTab(QWidget):
 
     def populate_site_combo(self) -> None:
         """Populate the site dropdown with saved server sites."""
+        saved_sites = load_sites("server")
+        saved_names = {str(site.get("name", "")) for site in saved_sites}
         current_data = self.local_site_combo.currentData()
-        selected_name = (
-            str(current_data)
-            if current_data
-            else get_selected_site_name("server")
-        )
+        if current_data and str(current_data) in saved_names:
+            selected_name = str(current_data)
+        else:
+            selected_name = get_selected_site_name("server")
         self.local_site_combo.blockSignals(True)
         self.local_site_combo.clear()
         self.local_site_combo.addItem(t("Manual / Default"), "")
-        saved_sites = load_sites("server")
         selected_idx = 0
         for idx, site in enumerate(saved_sites, start=1):
             name = str(site.get("name", ""))
@@ -266,18 +282,10 @@ class ServerTab(QWidget):
         self.local_site_combo.setCurrentIndex(selected_idx)
         self.local_site_combo.blockSignals(False)
 
-    def _populate_site_combo(self) -> None:
-        """Backwards-compatible alias for populate_site_combo."""
-        self.populate_site_combo()
-
     def on_sites_updated(self, site_type: str) -> None:
         """Handle site configuration updates."""
         if site_type == "server":
             self.populate_site_combo()
-
-    def _on_sites_updated(self, site_type: str) -> None:
-        """Backwards-compatible alias for on_sites_updated."""
-        self.on_sites_updated(site_type)
 
     def on_site_selected(self, _index: int) -> None:
         """Handle selection change in site dropdown."""
@@ -298,10 +306,6 @@ class ServerTab(QWidget):
             str(pwd_val) if isinstance(pwd_val, str) else ""
         )
 
-    def _on_site_selected(self, index: int) -> None:
-        """Backwards-compatible alias for on_site_selected."""
-        self.on_site_selected(index)
-
     def get_active_cf_settings(self) -> Tuple[bool, str, str]:
         """Return (use_cf, cf_token, cf_path) based on active site."""
         site_name = str(self.local_site_combo.currentData() or "")
@@ -317,10 +321,6 @@ class ServerTab(QWidget):
                 cf_path = str(site.get("cloudflared_path") or "").strip()
                 return True, token, cf_path
         return False, "", ""
-
-    def _get_active_cf_settings(self) -> Tuple[bool, str, str]:
-        """Backwards-compatible alias for get_active_cf_settings."""
-        return self.get_active_cf_settings()
 
     def restart_server(self):
         """Restart server."""
