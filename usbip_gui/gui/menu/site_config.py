@@ -148,9 +148,7 @@ class SiteTypeWidget(QWidget):
         left_layout = QVBoxLayout()
         self.site_list = QListWidget()
         self.site_list.setIconSize(QSize(16, 16))
-        connect_signal(
-            self.site_list.currentRowChanged, self.on_site_selected
-        )
+        connect_signal(self.site_list.currentRowChanged, self.on_site_selected)
         left_layout.addWidget(self.site_list)
 
         btn_row = QHBoxLayout()

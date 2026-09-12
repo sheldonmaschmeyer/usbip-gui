@@ -675,6 +675,7 @@ def test_resolve_cloudflared_executable_env_candidate_win32():
     """Test resolve_cloudflared_executable finding env candidate on win32."""
     with patch("sys.platform", "win32"):
         with patch("os.path.isfile") as mock_isfile:
+
             def is_candidate_path(path: object) -> bool:
                 return "Library" in str(path)
 
@@ -687,6 +688,7 @@ def test_resolve_cloudflared_executable_env_candidate_linux():
     """Test resolve_cloudflared_executable finding env candidate on linux."""
     with patch("sys.platform", "linux"):
         with patch("os.path.isfile") as mock_isfile:
+
             def is_candidate_path(path: object) -> bool:
                 return "bin/cloudflared" in str(path)
 

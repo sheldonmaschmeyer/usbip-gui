@@ -1,10 +1,7 @@
-"""Server tab implementation for exposing local USB devices."""
+"""Server tab UI and interactions."""
 
 import os
-import re
-import subprocess
 import sys
-import threading
 import time
 from typing import List, Tuple
 
@@ -25,12 +22,8 @@ from usbip_gui.typings import connect_signal, set_header_labels
 from usbip_gui.common import (
     get_translator,
     USBIPD_PORT,
-    tunnel_state,
     SortableTreeWidgetItem,
     set_min_column_widths,
-    elevate_command,
-    run_elevated,
-    resolve_cloudflared_executable,
     load_sites,
     get_site,
     get_selected_site_name,
@@ -43,246 +36,22 @@ from usbip_gui.gui.dialogs import ensure_unlocked
 from usbip_gui.product_detection import (
     ItemUpdater,
     enrich_device_item,
-    extract_unknown_product_suffix,
     is_unknown_product,
 )
-from .. import ssl_tunnel
+from ... import ssl_tunnel
+from .parsing import (
+    bind_local_usb,
+    list_local_usb,
+    local_device_columns,
+    unbind_local_usb,
+)
+from .runtime import init_usbip_server
 
 t = get_translator("server")
 
 
-def local_device_columns() -> List[str]:
-    """Column headers for the local device tree, for the active language."""
-    # pylint: disable=duplicate-code
-    cols = [
-        t("Bus ID"),
-        t("State"),
-        t("Manufacturer"),
-        t("Description"),
-        t("VID : PID"),
-    ]
-    if sys.platform == "win32":
-        cols.insert(4, t("Windows Driver"))
-    return cols
-
-
-# pylint: disable=too-many-arguments,too-many-positional-arguments
-def init_usbip_server(
-    port: int = 3240,
-    secure: bool = False,
-    password: str = "",
-    bind_host: str = "0.0.0.0",
-    use_cloudflared: bool = False,
-    cloudflared_token: str = "",
-    cloudflared_path: str = "",
-):
-    """Init usbip server."""
-    if sys.platform != "win32":
-        subprocess.run(elevate_command(["pkill", "usbipd"]), check=False)
-        subprocess.run(["pkill", "-f", "ssl_tunnel.py server"], check=False)
-    if tunnel_state.server_process:
-        try:
-            tunnel_state.server_process.terminate()
-            tunnel_state.server_process.wait()
-        except OSError:
-            pass
-        tunnel_state.server_process = None
-
-    if tunnel_state.cloudflared_server_process:
-        try:
-            tunnel_state.cloudflared_server_process.terminate()
-            tunnel_state.cloudflared_server_process.wait()
-        except OSError:
-            pass
-        tunnel_state.cloudflared_server_process = None
-
-    if use_cloudflared and cloudflared_token:
-        cloudflared_exe = resolve_cloudflared_executable(cloudflared_path)
-
-        def run_cf_server():
-            with subprocess.Popen(
-                [
-                    cloudflared_exe,
-                    "tunnel",
-                    "run",
-                    "--token",
-                    cloudflared_token,
-                ]
-            ) as process:
-                tunnel_state.cloudflared_server_process = process
-                process.wait()
-                if tunnel_state.cloudflared_server_process is process:
-                    tunnel_state.cloudflared_server_process = None
-
-        threading.Thread(target=run_cf_server, daemon=True).start()
-
-    if secure:
-        if sys.platform != "win32":
-            target_port = port + 10000
-            listen_port = port
-            subprocess.run(
-                elevate_command(
-                    ["usbipd", "-D", "--tcp-port", str(target_port)]
-                ),
-                check=False,
-            )
-        else:
-            target_port = 3240
-            listen_port = 3241 if port == 3240 else port
-
-        def run_tunnel():
-            with subprocess.Popen(
-                [
-                    sys.executable,
-                    os.path.join(
-                        os.path.dirname(os.path.dirname(__file__)),
-                        "ssl_tunnel.py",
-                    ),
-                    "server",
-                    "--listen-port",
-                    str(listen_port),
-                    "--target-port",
-                    str(target_port),
-                    "--bind-host",
-                    bind_host,
-                    "--password",
-                    password,
-                ]
-            ) as process:
-                tunnel_state.server_process = process
-                process.wait()
-
-        threading.Thread(target=run_tunnel, daemon=True).start()
-    else:
-        if sys.platform != "win32":
-            subprocess.run(
-                elevate_command(["usbipd", "-D", "--tcp-port", str(port)]),
-                check=False,
-            )
-
-
-def parse_local_list(text: str) -> List[Tuple[str, str, str, str, str]]:
-    """Parse local list."""
-    if not text or not text.strip():
-        return []
-
-    rows: List[Tuple[str, str, str, str, str]] = []
-    devices = text.strip().split("\n\n")
-    for device in devices:
-        lines = device.strip().split("\n")
-        if len(lines) < 2:
-            continue
-        bus_info = lines[0].split(" ")
-        man_info = lines[1].split(":")
-
-        bus_id = bus_info[2] if len(bus_info) > 2 else ""
-        vid_pid = ""
-        vid_match = re.search(r"\(([^)]+)\)", lines[0])
-        if vid_match:
-            vid_pid = vid_match.group(1)
-
-        manufacturer = man_info[0].strip() if len(man_info) > 0 else ""
-        description = (
-            ":".join(man_info[1:]).strip() if len(man_info) > 1 else ""
-        )
-
-        # Strip the redundant suffix if it's in the description
-        suffix_match = extract_unknown_product_suffix(description)
-        if suffix_match:
-            description = description[: -len(suffix_match)].strip()
-
-        state = t("Unbound")
-        if bus_id:
-            driver_path = f"/sys/bus/usb/devices/{bus_id}/driver"
-            if os.path.exists(driver_path) and os.path.islink(driver_path):
-                driver = os.path.basename(os.readlink(driver_path))
-                if driver == "usbip-host":
-                    state = t("Bound")
-
-        rows.append((bus_id, state, manufacturer, description, vid_pid))
-    return rows
-
-
-def parse_windows_local_list(
-    text: str,
-) -> List[Tuple[str, str, str, str, str]]:
-    """Parse windows local list."""
-    if not text or not text.strip():
-        return []
-
-    rows: List[Tuple[str, str, str, str, str]] = []
-    for line in text.strip().split("\n"):
-        match = re.match(
-            r"^(\d+-\d+(?:\.\d+)*)\s+"
-            r"([0-9a-fA-F]{4}:[0-9a-fA-F]{4})\s+"
-            r"(.+?)\s{2,}(Not shared|Shared|Attached.*)$",
-            line.strip(),
-        )
-        if match:
-            bus_id, vid_pid, device, state = match.groups()
-            gui_state = (
-                t("Bound")
-                if "Shared" in state or "Attached" in state
-                else t("Unbound")
-            )
-            rows.append((bus_id, gui_state, "", device, vid_pid))
-    return rows
-
-
-def list_local_usb() -> List[Tuple[str, str, str, str, str]]:
-    """List local usb."""
-    if sys.platform == "win32":
-        result = subprocess.run(
-            ["usbipd", "list"], capture_output=True, text=True, check=False
-        )
-        return parse_windows_local_list(result.stdout)
-
-    result = run_elevated(["usbip", "list", "--local"])
-    return parse_local_list(result.stdout)
-
-
-def bind_local_usb(bus_id: str):
-    """Bind local usb."""
-    if sys.platform == "win32":
-        cmd = ["usbipd", "bind", "--busid", bus_id]
-    else:
-        cmd = ["usbip", "bind", "--busid=" + bus_id]
-
-    print(f"DEBUG: Executing elevated command: {' '.join(cmd)}", flush=True)
-    result = run_elevated(cmd)
-    if result.stdout:
-        print(f"stdout: {result.stdout}", flush=True)
-    if result.stderr:
-        print(f"stderr: {result.stderr}", flush=True)
-    print(
-        f"DEBUG: Command finished with exit code {result.returncode}",
-        flush=True,
-    )
-    return result
-
-
-def unbind_local_usb(bus_id: str):
-    """Unbind local usb."""
-    if sys.platform == "win32":
-        cmd = ["usbipd", "unbind", "--busid", bus_id]
-    else:
-        cmd = ["usbip", "unbind", "--busid=" + bus_id]
-
-    print(f"DEBUG: Executing elevated command: {' '.join(cmd)}", flush=True)
-    result = run_elevated(cmd)
-    if result.stdout:
-        print(f"stdout: {result.stdout}", flush=True)
-    if result.stderr:
-        print(f"stderr: {result.stderr}", flush=True)
-    print(
-        f"DEBUG: Command finished with exit code {result.returncode}",
-        flush=True,
-    )
-    return result
-
-
 class ServerTab(QWidget):
-    """Servertab."""
+    """Server tab implementation for exposing local USB devices."""
 
     def __init__(self, parent: QWidget | None = None):
         """Initialize the class instance."""

@@ -328,6 +328,7 @@ def test_set_change_remove_and_reset_master_password():
         "usbip_gui.common.site_config.load_config", return_value=mock_config
     ):
         with patch("usbip_gui.common.site_config.save_config"):
+
             def fake_create_sentinel(pw: str) -> tuple[bytes, dict[str, str]]:
                 return (
                     b"k" * 32,
