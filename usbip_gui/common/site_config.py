@@ -4,6 +4,17 @@ from typing import Dict, List, Optional
 from PyQt6.QtCore import QObject, pyqtSignal
 
 from .common import load_config, save_config, JsonValue
+from .crypto import (
+    DecryptionError,
+    SECRET_FIELDS,
+    SENTINEL_CONFIG_KEY,
+    create_sentinel,
+    decrypt_field,
+    encrypt_field,
+    is_encrypted_field,
+    master_key_manager,
+    verify_sentinel,
+)
 
 SiteDict = Dict[str, JsonValue]
 
@@ -31,9 +42,24 @@ def _get_selected_key(site_type: str) -> str:
     )
 
 
-def load_sites(site_type: str) -> List[SiteDict]:
+def _decrypt_site_secrets(site: SiteDict, key: bytes) -> None:
+    """Decrypt any encrypted secret fields in site data."""
+    for field in SECRET_FIELDS:
+        val = site.get(field)
+        if is_encrypted_field(val):
+            try:
+                site[field] = decrypt_field(val, key)
+            except DecryptionError:
+                site[field] = ""
+
+
+def load_sites(site_type: str, decrypt: bool = True) -> List[SiteDict]:
     """
     Load all saved sites for the specified site type ('client' or 'server').
+
+    Args:
+        site_type: 'client' or 'server'.
+        decrypt: Whether to decrypt secret fields if master key is available.
 
     Returns:
         List[SiteDict]: List of site configurations.
@@ -43,10 +69,15 @@ def load_sites(site_type: str) -> List[SiteDict]:
     if not isinstance(raw_sites, list):
         return []
 
+    key = master_key_manager.get_key() if decrypt else None
     sites: List[SiteDict] = []
     for item in raw_sites:
-        if isinstance(item, dict):
-            sites.append(dict(item))
+        if not isinstance(item, dict):
+            continue
+        site_copy = dict(item)
+        if key is not None:
+            _decrypt_site_secrets(site_copy, key)
+        sites.append(site_copy)
     return sites
 
 
@@ -71,8 +102,20 @@ def save_site(site_type: str, site_data: SiteDict) -> None:
         else []
     )
 
-    updated = False
+    sec_key = (
+        master_key_manager.get_key()
+        if is_master_password_configured() and master_key_manager.is_unlocked()
+        else None
+    )
+
     clean_data: Dict[str, JsonValue] = dict(site_data)
+    if sec_key is not None:
+        for field in SECRET_FIELDS:
+            val = clean_data.get(field)
+            if isinstance(val, str) and val:
+                clean_data[field] = encrypt_field(val, sec_key)
+
+    updated = False
     for idx, existing in enumerate(sites):
         if existing.get("name") == name:
             sites[idx] = clean_data
@@ -97,7 +140,22 @@ def save_all_sites(site_type: str, sites: List[SiteDict]) -> None:
     """
     config = load_config()
     key = _get_key(site_type)
-    cleaned: List[Dict[str, JsonValue]] = [dict(s) for s in sites]
+    cleaned: List[Dict[str, JsonValue]] = []
+    sec_key = (
+        master_key_manager.get_key()
+        if is_master_password_configured() and master_key_manager.is_unlocked()
+        else None
+    )
+
+    for s in sites:
+        item: Dict[str, JsonValue] = dict(s)
+        if sec_key is not None:
+            for field in SECRET_FIELDS:
+                val = item.get(field)
+                if isinstance(val, str) and val:
+                    item[field] = encrypt_field(val, sec_key)
+        cleaned.append(item)
+
     config[key] = cleaned  # type: ignore[assignment]
     save_config(config)
     sites_updated.changed.emit(site_type)
@@ -176,3 +234,161 @@ def set_selected_site_name(site_type: str, name: str) -> None:
     config = load_config()
     config[_get_selected_key(site_type)] = name
     save_config(config)
+
+
+def is_master_password_configured() -> bool:
+    """Return True if a master password has been configured."""
+    config = load_config()
+    sentinel = config.get(SENTINEL_CONFIG_KEY)
+    return isinstance(sentinel, dict) and sentinel.get("enc") == "v1"
+
+
+def is_master_password_unlocked() -> bool:
+    """Return True if master password is configured and unlocked in RAM."""
+    return is_master_password_configured() and master_key_manager.is_unlocked()
+
+
+def unlock_master_password(password: str) -> bool:
+    """
+    Verify master password and store key in memory for this session.
+
+    Args:
+        password: User-entered password.
+
+    Returns:
+        bool: True if verified and unlocked, False otherwise.
+    """
+    config = load_config()
+    sentinel = config.get(SENTINEL_CONFIG_KEY)
+    if not isinstance(sentinel, dict):
+        return False
+    key = verify_sentinel(password, sentinel)
+    if key is None:
+        return False
+    master_key_manager.set_key(key)
+    sites_updated.changed.emit("client")
+    sites_updated.changed.emit("server")
+    return True
+
+
+def lock_master_password() -> None:
+    """Lock the session key cache."""
+    master_key_manager.clear()
+    sites_updated.changed.emit("client")
+    sites_updated.changed.emit("server")
+
+
+def site_requires_unlock(site: Optional[SiteDict]) -> bool:
+    """Return True if site contains encrypted fields and session is locked."""
+    if site is None or master_key_manager.is_unlocked():
+        return False
+    for field in SECRET_FIELDS:
+        if is_encrypted_field(site.get(field)):
+            return True
+    return False
+
+
+def set_master_password(password: str) -> None:
+    """
+    Configure a new master password and encrypt all existing site secrets.
+
+    Args:
+        password: New master password.
+    """
+    config = load_config()
+    key, sentinel = create_sentinel(password)
+    master_key_manager.set_key(key)
+    config[SENTINEL_CONFIG_KEY] = sentinel
+    save_config(config)
+
+    for st in ("client", "server"):
+        current = load_sites(st, decrypt=True)
+        save_all_sites(st, current)
+
+
+def change_master_password(old_password: str, new_password: str) -> bool:
+    """
+    Change the master password and re-encrypt all site credentials.
+
+    Args:
+        old_password: Current master password.
+        new_password: New master password.
+
+    Returns:
+        bool: True if changed successfully, False if old password invalid.
+    """
+    config = load_config()
+    sentinel = config.get(SENTINEL_CONFIG_KEY)
+    if not isinstance(sentinel, dict):
+        return False
+    old_key = verify_sentinel(old_password, sentinel)
+    if old_key is None:
+        return False
+
+    master_key_manager.set_key(old_key)
+    client_sites = load_sites("client", decrypt=True)
+    server_sites = load_sites("server", decrypt=True)
+
+    new_key, new_sentinel = create_sentinel(new_password)
+    master_key_manager.set_key(new_key)
+    config[SENTINEL_CONFIG_KEY] = new_sentinel
+    save_config(config)
+
+    save_all_sites("client", client_sites)
+    save_all_sites("server", server_sites)
+    return True
+
+
+def remove_master_password(current_password: str) -> bool:
+    """
+    Remove master password protection and decrypt credentials to plain text.
+
+    Args:
+        current_password: Current master password.
+
+    Returns:
+        bool: True if removed successfully, False if password invalid.
+    """
+    config = load_config()
+    sentinel = config.get(SENTINEL_CONFIG_KEY)
+    if not isinstance(sentinel, dict):
+        return False
+    key = verify_sentinel(current_password, sentinel)
+    if key is None:
+        return False
+
+    master_key_manager.set_key(key)
+    client_sites = load_sites("client", decrypt=True)
+    server_sites = load_sites("server", decrypt=True)
+
+    config.pop(SENTINEL_CONFIG_KEY, None)
+    save_config(config)
+    master_key_manager.clear()
+
+    save_all_sites("client", client_sites)
+    save_all_sites("server", server_sites)
+    return True
+
+
+def reset_storage() -> None:
+    """
+    Reset site configuration storage.
+
+    Clears all saved client and server sites, resets selected site names,
+    and removes master password protection.
+    """
+    config = load_config()
+    config.pop(SENTINEL_CONFIG_KEY, None)
+    config["client_sites"] = []
+    config["server_sites"] = []
+    config["selected_client_site"] = ""
+    config["selected_server_site"] = ""
+    master_key_manager.clear()
+    save_config(config)
+    sites_updated.changed.emit("client")
+    sites_updated.changed.emit("server")
+
+
+def reset_master_password() -> None:
+    """Reset master password and clear stored site configuration."""
+    reset_storage()

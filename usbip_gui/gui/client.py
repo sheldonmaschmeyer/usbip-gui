@@ -46,9 +46,11 @@ from usbip_gui.common import (
     get_site,
     get_selected_site_name,
     set_selected_site_name,
+    site_requires_unlock,
     sites_updated,
 )
 from usbip_gui.common.common import configure_tree_widget_interaction
+from usbip_gui.gui.dialogs import ensure_unlocked
 from usbip_gui.product_detection import (
     ItemUpdater,
     enrich_remote_device_item,
@@ -632,9 +634,9 @@ class ClientTab(QWidget):
         self.remote_site_combo = QComboBox()
         self.remote_site_combo.setMinimumWidth(110)
         connect_signal(
-            self.remote_site_combo.currentIndexChanged, self._on_site_selected
+            self.remote_site_combo.currentIndexChanged, self.on_site_selected
         )
-        connect_signal(sites_updated.changed, self._on_sites_updated)
+        connect_signal(sites_updated.changed, self.on_sites_updated)
 
         self.remote_connect_button = QPushButton(t("Connect"))
         connect_signal(self.remote_connect_button.clicked, self.connect_site)
@@ -687,7 +689,7 @@ class ClientTab(QWidget):
         self.remote_control_layout.addWidget(self.detach_button)
         self.remote_control_layout.addStretch()
 
-        self._populate_site_combo()
+        self.populate_site_combo()
 
         # Remote List
         self.remote_listbox = QTreeWidget()
@@ -708,7 +710,7 @@ class ClientTab(QWidget):
         layout.addLayout(self.remote_control_layout)
         layout.addWidget(self.remote_listbox)
 
-    def _populate_site_combo(self) -> None:
+    def populate_site_combo(self) -> None:
         """Populate the site dropdown with saved client sites."""
         current_data = self.remote_site_combo.currentData()
         selected_name = (
@@ -729,12 +731,20 @@ class ClientTab(QWidget):
         self.remote_site_combo.setCurrentIndex(selected_idx)
         self.remote_site_combo.blockSignals(False)
 
-    def _on_sites_updated(self, site_type: str) -> None:
+    def _populate_site_combo(self) -> None:
+        """Backwards-compatible alias for populate_site_combo."""
+        self.populate_site_combo()
+
+    def on_sites_updated(self, site_type: str) -> None:
         """Handle site configuration updates."""
         if site_type == "client":
-            self._populate_site_combo()
+            self.populate_site_combo()
 
-    def _on_site_selected(self, _index: int) -> None:
+    def _on_sites_updated(self, site_type: str) -> None:
+        """Backwards-compatible alias for on_sites_updated."""
+        self.on_sites_updated(site_type)
+
+    def on_site_selected(self, _index: int) -> None:
         """Handle selection change in site dropdown."""
         site_name = str(self.remote_site_combo.currentData() or "")
         set_selected_site_name("client", site_name)
@@ -754,9 +764,16 @@ class ClientTab(QWidget):
         self.remote_secure_checkbox.blockSignals(True)
         self.remote_secure_checkbox.setChecked(bool(site.get("secure", True)))
         self.remote_secure_checkbox.blockSignals(False)
-        self.remote_password_input.setText(str(site.get("password", "")))
+        pwd_val = site.get("password", "")
+        self.remote_password_input.setText(
+            str(pwd_val) if isinstance(pwd_val, str) else ""
+        )
 
-    def _get_active_cf_settings(
+    def _on_site_selected(self, index: int) -> None:
+        """Backwards-compatible alias for on_site_selected."""
+        self.on_site_selected(index)
+
+    def get_active_cf_settings(
         self,
     ) -> Tuple[bool, str, str, str, str]:
         """Return (use_cf, hostname, path, token_id, token_secret)."""
@@ -769,12 +786,18 @@ class ClientTab(QWidget):
                     or self.remote_ip_input.text()
                 ).strip()
                 cf_path = str(site.get("cloudflared_path") or "").strip()
-                cf_token_id = str(
-                    site.get("cloudflared_token_id") or ""
-                ).strip()
-                cf_token_secret = str(
-                    site.get("cloudflared_token_secret") or ""
-                ).strip()
+                token_id_val = site.get("cloudflared_token_id")
+                cf_token_id = (
+                    str(token_id_val).strip()
+                    if isinstance(token_id_val, str)
+                    else ""
+                )
+                secret_val = site.get("cloudflared_token_secret")
+                cf_token_secret = (
+                    str(secret_val).strip()
+                    if isinstance(secret_val, str)
+                    else ""
+                )
                 return (
                     True,
                     cf_host,
@@ -783,6 +806,12 @@ class ClientTab(QWidget):
                     cf_token_secret,
                 )
         return False, "", "", "", ""
+
+    def _get_active_cf_settings(
+        self,
+    ) -> Tuple[bool, str, str, str, str]:
+        """Backwards-compatible alias for get_active_cf_settings."""
+        return self.get_active_cf_settings()
 
     def connect_site(self) -> None:
         """Connect to the selected site and populate remote devices."""
@@ -795,6 +824,14 @@ class ClientTab(QWidget):
 
     def refresh_remote(self):
         """Refresh remote."""
+        site_name = str(self.remote_site_combo.currentData() or "")
+        if site_name:
+            site = get_site("client", site_name)
+            if site_requires_unlock(site):
+                if not ensure_unlocked(self):
+                    return
+                self.on_site_selected(self.remote_site_combo.currentIndex())
+
         server_ip = self.remote_ip_input.text()
         try:
             port = int(self.remote_port_input.text())
@@ -811,7 +848,7 @@ class ClientTab(QWidget):
                 cf_path,
                 cf_token_id,
                 cf_token_secret,
-            ) = self._get_active_cf_settings()
+            ) = self.get_active_cf_settings()
         except (ValueError, TypeError):
             use_cf, cf_hostname, cf_path = False, "", ""
             cf_token_id, cf_token_secret = "", ""
@@ -856,9 +893,7 @@ class ClientTab(QWidget):
                 att = attached_by_busid.pop(r_bus_id)
                 local_port = att[1]
 
-            display_ip = (
-                cf_hostname if use_cf and cf_hostname else server_ip
-            )
+            display_ip = cf_hostname if use_cf and cf_hostname else server_ip
             item_data = [
                 display_ip,
                 str(port),
@@ -962,7 +997,7 @@ class ClientTab(QWidget):
                 cf_path,
                 cf_token_id,
                 cf_token_secret,
-            ) = self._get_active_cf_settings()
+            ) = self.get_active_cf_settings()
         except (ValueError, TypeError):
             use_cf, cf_hostname, cf_path = False, "", ""
             cf_token_id, cf_token_secret = "", ""

@@ -1,16 +1,17 @@
 """Tests for the client tab."""
 
-# pylint: disable=duplicate-code, too-many-lines
+# pylint: disable=duplicate-code, too-many-lines, protected-access
 
 import subprocess
 import sys
 from pathlib import PurePosixPath
 from types import TracebackType
-from typing import Literal, Type
+from typing import Callable, Literal, Type
 
 from unittest.mock import MagicMock, mock_open, patch
 from PyQt6.QtWidgets import QMessageBox
 import usbip_gui.gui.client as client_mod
+from usbip_gui.common import tunnel_state
 
 from usbip_gui.gui.client import (
     ClientTab,
@@ -1336,8 +1337,6 @@ def test_get_or_create_cloudflared_client_tunnel(
     mock_sleep: MagicMock,
 ):
     """Test get_or_create_cloudflared_client_tunnel lifecycle."""
-    from usbip_gui.common import tunnel_state
-
     # 1. Existing active process returns cached port
     mock_active = MagicMock()
     mock_active.poll.return_value = None
@@ -1352,7 +1351,10 @@ def test_get_or_create_cloudflared_client_tunnel(
     mock_proc = MagicMock()
     mock_popen.return_value = mock_proc
 
-    def execute_thread(target=None, **_kwargs):
+    def execute_thread(
+        target: Callable[[], object] | None = None,
+        **_kwargs: object,
+    ) -> MagicMock:
         thread_obj = MagicMock()
         if target:
             target()
@@ -1398,7 +1400,7 @@ def test_list_remote_usb_cloudflared(
     # Failure to establish cf tunnel
     mock_cf_tunnel.return_value = ("", 0)
     res = list_remote_usb("server", use_cloudflared=True)
-    assert res == []
+    assert not res
 
     # Successful cf tunnel
     mock_cf_tunnel.return_value = ("127.0.0.1", 45000)
@@ -1408,7 +1410,7 @@ def test_list_remote_usb_cloudflared(
         use_cloudflared=True,
         cloudflared_hostname="usbip.maschmeyer.ca",
     )
-    assert res == []
+    assert not res
     mock_cf_tunnel.assert_called_with(
         "usbip.maschmeyer.ca",
         "",
@@ -1481,52 +1483,53 @@ def test_client_tab_site_selection_and_cf(
         },
     ]
 
-    with patch(
-        "usbip_gui.gui.client.load_sites", return_value=mock_sites
-    ), patch(
-        "usbip_gui.gui.client.get_selected_site_name",
-        return_value="Cloudflare Client",
+    with (
+        patch("usbip_gui.gui.client.load_sites", return_value=mock_sites),
+        patch(
+            "usbip_gui.gui.client.get_selected_site_name",
+            return_value="Cloudflare Client",
+        ),
     ):
-        tab._populate_site_combo()
+        tab.populate_site_combo()
         assert tab.remote_site_combo.count() == 3
         assert tab.remote_site_combo.currentText() == "Cloudflare Client"
 
-    # Test _on_sites_updated
-    with patch.object(tab, "_populate_site_combo") as mock_pop:
-        tab._on_sites_updated("server")
+    # Test on_sites_updated
+    with patch.object(tab, "populate_site_combo") as mock_pop:
+        tab.on_sites_updated("server")
         mock_pop.assert_not_called()
-        tab._on_sites_updated("client")
+        tab.on_sites_updated("client")
         mock_pop.assert_called_once()
 
-    # Test _on_site_selected with empty site
+    # Test on_site_selected with empty site
     tab.remote_site_combo.setCurrentIndex(0)
-    tab._on_site_selected(0)
+    tab.on_site_selected(0)
     mock_set.assert_called_with("client", "")
 
-    # Test _on_site_selected with non-existent site
+    # Test on_site_selected with non-existent site
     tab.remote_site_combo.setCurrentIndex(1)
     with patch("usbip_gui.gui.client.get_site", return_value=None):
-        tab._on_site_selected(1)
+        tab.on_site_selected(1)
 
-    # Test _on_site_selected with direct site
+    # Test on_site_selected with direct site
     direct_site = mock_sites[0]
     with patch("usbip_gui.gui.client.get_site", return_value=direct_site):
-        tab._on_site_selected(1)
+        tab.on_site_selected(1)
         assert tab.remote_ip_input.text() == "192.168.1.50"
 
-    # Test _on_site_selected with cloudflared site
+    # Test on_site_selected with cloudflared site
     cf_site = mock_sites[1]
     with patch("usbip_gui.gui.client.get_site", return_value=cf_site):
         tab.remote_site_combo.setCurrentIndex(2)
-        tab._on_site_selected(2)
+        tab.on_site_selected(2)
         assert tab.remote_ip_input.text() == "usbip.maschmeyer.ca"
         assert tab.remote_port_input.text() == "3240"
         assert tab.remote_secure_checkbox.isChecked() is True
         assert tab.remote_password_input.text() == "pass"
 
-    # Test _get_active_cf_settings
+    # Test get_active_cf_settings
     with patch("usbip_gui.gui.client.get_site", return_value=cf_site):
-        use_cf, host, path, tok_id, tok_sec = tab._get_active_cf_settings()
+        use_cf, host, path, tok_id, tok_sec = tab.get_active_cf_settings()
         assert use_cf is True
         assert host == "usbip.maschmeyer.ca"
         assert path == "/opt/cf"
@@ -1534,7 +1537,7 @@ def test_client_tab_site_selection_and_cf(
         assert tok_sec == "tok_sec"
 
     with patch("usbip_gui.gui.client.get_site", return_value=direct_site):
-        use_cf, host, path, tok_id, tok_sec = tab._get_active_cf_settings()
+        use_cf, host, path, tok_id, tok_sec = tab.get_active_cf_settings()
         assert use_cf is False
         assert host == ""
         assert path == ""
@@ -1545,6 +1548,59 @@ def test_client_tab_site_selection_and_cf(
     with patch.object(tab, "refresh_remote") as mock_refresh:
         tab.connect_site()
         mock_refresh.assert_called_once()
+
+    # Test encrypted password sets empty string in on_site_selected
+    enc_site = {
+        "name": "Encrypted Site",
+        "connection_type": "cloudflared",
+        "cloudflared_hostname": "test.host",
+        "cloudflared_token_id": {"enc": "v1"},
+        "cloudflared_token_secret": {"enc": "v1"},
+        "port": 3240,
+        "password": {"enc": "v1"},
+    }
+    with patch("usbip_gui.gui.client.get_site", return_value=enc_site):
+        tab.on_site_selected(2)
+        assert tab.remote_password_input.text() == ""
+        use_cf, host, path, tok_id, tok_sec = tab.get_active_cf_settings()
+        assert use_cf is True
+        assert tok_id == ""
+        assert tok_sec == ""
+
+    # Test refresh_remote aborts if unlock cancelled
+    with patch.object(
+        tab.remote_site_combo, "currentData", return_value="Encrypted Site"
+    ):
+        with patch("usbip_gui.gui.client.get_site", return_value=enc_site):
+            with patch(
+                "usbip_gui.gui.client.site_requires_unlock", return_value=True
+            ):
+                with patch(
+                    "usbip_gui.gui.client.ensure_unlocked", return_value=False
+                ):
+                    with patch(
+                        "usbip_gui.gui.client.list_remote_usb"
+                    ) as mock_list:
+                        tab.refresh_remote()
+                        mock_list.assert_not_called()
+
+                # Test refresh_remote succeeds if unlocked
+                with patch(
+                    "usbip_gui.gui.client.ensure_unlocked", return_value=True
+                ):
+                    with patch.object(tab, "on_site_selected") as mock_sel:
+                        with (
+                            patch(
+                                "usbip_gui.gui.client.list_remote_usb"
+                            ) as mock_list,
+                            patch(
+                                "usbip_gui.gui.client.list_attached_usb",
+                                return_value=[],
+                            ),
+                        ):
+                            tab.refresh_remote()
+                            mock_sel.assert_called_once()
+                            mock_list.assert_called_once()
 
 
 @patch("usbip_gui.gui.client.list_attached_usb", return_value=[])
@@ -1563,14 +1619,20 @@ def test_refresh_remote_cloudflared_validation_and_call(
     tab.remote_password_input.text.return_value = ""
 
     # Missing cf hostname
-    tab._get_active_cf_settings.return_value = (True, "", "", "", "")
+    tab.get_active_cf_settings.return_value = (
+        True,
+        "",
+        "",
+        "",
+        "",
+    )
     ClientTab.refresh_remote(tab)
     mock_critical.assert_called_once()
     mock_list.assert_not_called()
 
     # Valid cf hostname
     mock_critical.reset_mock()
-    tab._get_active_cf_settings.return_value = (
+    tab.get_active_cf_settings.return_value = (
         True,
         "usbip.maschmeyer.ca",
         "/cf/path",
@@ -1608,18 +1670,28 @@ def test_attach_remote_cloudflared_validation_and_call(
     tab.remote_secure_checkbox.isChecked.return_value = False
     tab.remote_password_input.text.return_value = ""
     item = MagicMock()
-    item.text.side_effect = lambda idx: "1-1" if idx == 2 else "Detached"
+
+    def item_text(idx: int) -> str:
+        return "1-1" if idx == 2 else "Detached"
+
+    item.text.side_effect = item_text
     tab.remote_listbox.selectedItems.return_value = [item]
 
     # Missing cf hostname
-    tab._get_active_cf_settings.return_value = (True, "", "", "", "")
+    tab.get_active_cf_settings.return_value = (
+        True,
+        "",
+        "",
+        "",
+        "",
+    )
     ClientTab.attach_remote(tab)
     mock_critical.assert_called_once()
     mock_attach.assert_not_called()
 
     # Valid cf hostname
     mock_critical.reset_mock()
-    tab._get_active_cf_settings.return_value = (
+    tab.get_active_cf_settings.return_value = (
         True,
         "usbip.maschmeyer.ca",
         "/cf/path",

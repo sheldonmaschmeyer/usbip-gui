@@ -447,6 +447,50 @@ def test_save_config_exception(_mock_path: MagicMock, mock_open: MagicMock):
     save_config({"test": "data"})  # should not raise
 
 
+def test_save_config_posix_and_windows(tmp_path: Path):
+    """Test save_config creates file with 0600 permissions."""
+    test_file = tmp_path / "settings.json"
+    with patch(
+        "usbip_gui.common.common.get_config_path", return_value=test_file
+    ):
+        # POSIX path
+        with patch("usbip_gui.common.common.sys") as mock_sys:
+            mock_sys.platform = "linux"
+            save_config({"key": "val1"})
+            assert test_file.exists()
+            assert json.loads(test_file.read_text(encoding="utf-8")) == {
+                "key": "val1"
+            }
+
+            # Chmod OSError handled
+            with patch(
+                "usbip_gui.common.common.os.chmod",
+                side_effect=OSError("denied"),
+            ):
+                save_config({"key": "val_chmod_err"})
+
+        # Windows path
+        with patch("usbip_gui.common.common.sys") as mock_sys:
+            mock_sys.platform = "win32"
+            save_config({"key": "val2"})
+            assert json.loads(test_file.read_text(encoding="utf-8")) == {
+                "key": "val2"
+            }
+
+
+def test_get_config_dir_chmod_oserror():
+    """Test get_config_dir handles os.chmod OSError gracefully."""
+    with patch("usbip_gui.common.common.sys") as mock_sys:
+        mock_sys.platform = "linux"
+        with patch("usbip_gui.common.common.Path.mkdir"):
+            with patch(
+                "usbip_gui.common.common.os.chmod",
+                side_effect=OSError("denied"),
+            ):
+                dir_path = get_config_dir()
+                assert dir_path.name == "usbip-gui"
+
+
 def test_sortable_tree_widget_item_fallback():
     """Test SortableTreeWidgetItem fallback logic when no tree."""
     item1 = SortableTreeWidgetItem(["10"])
@@ -631,7 +675,10 @@ def test_resolve_cloudflared_executable_env_candidate_win32():
     """Test resolve_cloudflared_executable finding env candidate on win32."""
     with patch("sys.platform", "win32"):
         with patch("os.path.isfile") as mock_isfile:
-            mock_isfile.side_effect = lambda p: "Library" in p
+            def is_candidate_path(path: object) -> bool:
+                return "Library" in str(path)
+
+            mock_isfile.side_effect = is_candidate_path
             res = resolve_cloudflared_executable()
             assert "cloudflared.exe" in res
 
@@ -640,7 +687,10 @@ def test_resolve_cloudflared_executable_env_candidate_linux():
     """Test resolve_cloudflared_executable finding env candidate on linux."""
     with patch("sys.platform", "linux"):
         with patch("os.path.isfile") as mock_isfile:
-            mock_isfile.side_effect = lambda p: "bin/cloudflared" in p
+            def is_candidate_path(path: object) -> bool:
+                return "bin/cloudflared" in str(path)
+
+            mock_isfile.side_effect = is_candidate_path
             res = resolve_cloudflared_executable()
             assert "cloudflared" in res
 

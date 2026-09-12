@@ -18,7 +18,10 @@
     "Custom cloudflared Path (Optional):": "Chemin cloudflared personnalisé (Optionnel) :",
     "Browse...": "Parcourir...",
     "Save": "Enregistrer",
+    "Save Site": "Enregistrer le site",
+    "Save Sites": "Enregistrer les sites",
     "Cancel": "Annuler",
+    "Close": "Fermer",
     "Delete Confirmation": "Confirmation de suppression",
     "Are you sure you want to delete site '{}'?": "Êtes-vous sûr de vouloir supprimer le site '{}' ?",
     "Validation Error": "Erreur de validation",
@@ -28,5 +31,9 @@
     "No sites configured. Click 'New Site' to add one.": "Aucun site configuré. Cliquez sur « Nouveau site » pour en ajouter un.",
     "No site selected.": "Aucun site sélectionné.",
     "Service Token ID (Optional):": "ID de jeton de service (Optionnel) :",
-    "Service Token Secret (Optional):": "Secret du jeton de service (Optionnel) :"
+    "Service Token Secret (Optional):": "Secret du jeton de service (Optionnel) :",
+    "Master Password...": "Mot de passe principal...",
+    "✓ Saved": "✓ Enregistré",
+    "Saved": "Enregistré",
+    "Unsaved changes": "Modifications non enregistrées"
 }

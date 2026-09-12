@@ -18,7 +18,10 @@
     "Custom cloudflared Path (Optional):": "",
     "Browse...": "",
     "Save": "",
+    "Save Site": "",
+    "Save Sites": "",
     "Cancel": "",
+    "Close": "",
     "Delete Confirmation": "",
     "Are you sure you want to delete site '{}'?": "",
     "Validation Error": "",
@@ -28,5 +31,9 @@
     "No sites configured. Click 'New Site' to add one.": "",
     "No site selected.": "",
     "Service Token ID (Optional):": "",
-    "Service Token Secret (Optional):": ""
+    "Service Token Secret (Optional):": "",
+    "Master Password...": "",
+    "✓ Saved": "",
+    "Saved": "",
+    "Unsaved changes": ""
 }

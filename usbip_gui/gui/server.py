@@ -35,9 +35,11 @@ from usbip_gui.common import (
     get_site,
     get_selected_site_name,
     set_selected_site_name,
+    site_requires_unlock,
     sites_updated,
 )
 from usbip_gui.common.common import configure_tree_widget_interaction
+from usbip_gui.gui.dialogs import ensure_unlocked
 from usbip_gui.product_detection import (
     ItemUpdater,
     enrich_device_item,
@@ -300,9 +302,9 @@ class ServerTab(QWidget):
         self.local_site_combo = QComboBox()
         self.local_site_combo.setMinimumWidth(110)
         connect_signal(
-            self.local_site_combo.currentIndexChanged, self._on_site_selected
+            self.local_site_combo.currentIndexChanged, self.on_site_selected
         )
-        connect_signal(sites_updated.changed, self._on_sites_updated)
+        connect_signal(sites_updated.changed, self.on_sites_updated)
 
         self.local_connect_button = QPushButton(t("Connect"))
         connect_signal(self.local_connect_button.clicked, self.restart_server)
@@ -364,7 +366,7 @@ class ServerTab(QWidget):
         self.local_control_layout1.addWidget(self.local_regen_cert_button)
         self.local_control_layout1.addStretch()
 
-        self._populate_site_combo()
+        self.populate_site_combo()
 
         # Control Frame 2 (actions)
         self.local_actions_layout = QHBoxLayout()
@@ -474,7 +476,7 @@ class ServerTab(QWidget):
         for i in range(len(local_device_columns())):
             self.local_listbox.resizeColumnToContents(i)
 
-    def _populate_site_combo(self) -> None:
+    def populate_site_combo(self) -> None:
         """Populate the site dropdown with saved server sites."""
         current_data = self.local_site_combo.currentData()
         selected_name = (
@@ -495,12 +497,20 @@ class ServerTab(QWidget):
         self.local_site_combo.setCurrentIndex(selected_idx)
         self.local_site_combo.blockSignals(False)
 
-    def _on_sites_updated(self, site_type: str) -> None:
+    def _populate_site_combo(self) -> None:
+        """Backwards-compatible alias for populate_site_combo."""
+        self.populate_site_combo()
+
+    def on_sites_updated(self, site_type: str) -> None:
         """Handle site configuration updates."""
         if site_type == "server":
-            self._populate_site_combo()
+            self.populate_site_combo()
 
-    def _on_site_selected(self, _index: int) -> None:
+    def _on_sites_updated(self, site_type: str) -> None:
+        """Backwards-compatible alias for on_sites_updated."""
+        self.on_sites_updated(site_type)
+
+    def on_site_selected(self, _index: int) -> None:
         """Handle selection change in site dropdown."""
         site_name = str(self.local_site_combo.currentData() or "")
         set_selected_site_name("server", site_name)
@@ -514,21 +524,45 @@ class ServerTab(QWidget):
         self.local_secure_checkbox.blockSignals(True)
         self.local_secure_checkbox.setChecked(bool(site.get("secure", True)))
         self.local_secure_checkbox.blockSignals(False)
-        self.local_password_input.setText(str(site.get("password", "")))
+        pwd_val = site.get("password", "")
+        self.local_password_input.setText(
+            str(pwd_val) if isinstance(pwd_val, str) else ""
+        )
 
-    def _get_active_cf_settings(self) -> Tuple[bool, str, str]:
+    def _on_site_selected(self, index: int) -> None:
+        """Backwards-compatible alias for on_site_selected."""
+        self.on_site_selected(index)
+
+    def get_active_cf_settings(self) -> Tuple[bool, str, str]:
         """Return (use_cf, cf_token, cf_path) based on active site."""
         site_name = str(self.local_site_combo.currentData() or "")
         if site_name:
             site = get_site("server", site_name)
             if site and site.get("connection_type") == "cloudflared":
-                token = str(site.get("cloudflared_token") or "").strip()
+                token_val = site.get("cloudflared_token")
+                token = (
+                    str(token_val).strip()
+                    if isinstance(token_val, str)
+                    else ""
+                )
                 cf_path = str(site.get("cloudflared_path") or "").strip()
                 return True, token, cf_path
         return False, "", ""
 
+    def _get_active_cf_settings(self) -> Tuple[bool, str, str]:
+        """Backwards-compatible alias for get_active_cf_settings."""
+        return self.get_active_cf_settings()
+
     def restart_server(self):
         """Restart server."""
+        site_name = str(self.local_site_combo.currentData() or "")
+        if site_name:
+            site = get_site("server", site_name)
+            if site_requires_unlock(site):
+                if not ensure_unlocked(self):
+                    return
+                self.on_site_selected(self.local_site_combo.currentIndex())
+
         try:
             port = int(self.local_port_input.text())
         except ValueError:
@@ -544,7 +578,7 @@ class ServerTab(QWidget):
         bind_host = self.local_bind_ip_input.text().strip() or "0.0.0.0"
 
         try:
-            use_cf, cf_token, cf_path = self._get_active_cf_settings()
+            use_cf, cf_token, cf_path = self.get_active_cf_settings()
         except (ValueError, TypeError):
             use_cf, cf_token, cf_path = False, "", ""
         if use_cf and not cf_token:

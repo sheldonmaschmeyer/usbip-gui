@@ -81,6 +81,11 @@ def get_config_dir() -> Path:
 
     config_dir = Path(base_dir) / "usbip-gui"
     config_dir.mkdir(parents=True, exist_ok=True)
+    if sys.platform != "win32":
+        try:
+            os.chmod(config_dir, 0o700)
+        except OSError:
+            pass
     return config_dir
 
 
@@ -105,8 +110,18 @@ def save_config(config: JsonDict) -> None:
     """Save configuration to file."""
     config_path = get_config_path()
     try:
-        with open(config_path, "w", encoding="utf-8") as f:
-            json.dump(config, f, indent=4)
+        if sys.platform != "win32":
+            flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+            fd = os.open(config_path, flags, 0o600)
+            with open(fd, "w", encoding="utf-8") as f:
+                json.dump(config, f, indent=4)
+            try:
+                os.chmod(config_path, 0o600)
+            except OSError:
+                pass
+        else:
+            with open(config_path, "w", encoding="utf-8") as f:
+                json.dump(config, f, indent=4)
     except Exception:  # pylint: disable=broad-exception-caught
         pass
 
@@ -117,9 +132,9 @@ class TunnelState:
     def __init__(self) -> None:
         """Initialize the class instance."""
         self.server_process: Optional[subprocess.Popen[bytes]] = None
-        self.cloudflared_server_process: Optional[
-            subprocess.Popen[bytes]
-        ] = None
+        self.cloudflared_server_process: Optional[subprocess.Popen[bytes]] = (
+            None
+        )
         self.client_processes: Dict[
             Tuple[str, int], Tuple[int, subprocess.Popen[bytes], str]
         ] = {}

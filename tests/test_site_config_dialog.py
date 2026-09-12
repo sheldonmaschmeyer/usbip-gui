@@ -1,11 +1,17 @@
 """Unit tests for the site configuration GUI dialog and widget."""
 
+# pylint: disable=protected-access
+
 from unittest.mock import MagicMock, patch
-from PyQt6.QtWidgets import QMessageBox
+from PyQt6.QtWidgets import QDialog, QMessageBox
 from usbip_gui.gui.menu.site_config import (
     SiteTypeWidget,
     SiteConfigDialog,
     show_site_config_dialog,
+    create_status_icon,
+    get_saved_icon,
+    get_unsaved_icon,
+    normalize_site,
 )
 
 
@@ -64,7 +70,7 @@ def test_site_type_widget_client_direct_and_cf():
         assert widget.cf_path_label.wordWrap()
 
         # Switch to CF Client
-        widget._on_site_selected(1)
+        widget.on_site_selected(1)
         assert widget.current_index == 1
         assert widget.name_input.text() == "CF Client"
         assert widget.host_input.isHidden()
@@ -75,7 +81,7 @@ def test_site_type_widget_client_direct_and_cf():
         assert widget.cf_token_secret_input.text() == "tok_sec_456"
 
         # Out-of-bounds selection
-        widget._on_site_selected(-1)
+        widget.on_site_selected(-1)
         assert widget.current_index == -1
         assert not widget.form_widget.isEnabled()
         assert widget.form_widget.isHidden()
@@ -115,7 +121,7 @@ def test_site_type_widget_server_sites():
         assert widget.cf_input.isHidden()
 
         # Switch to CF Server
-        widget._on_site_selected(1)
+        widget.on_site_selected(1)
         assert widget.host_input.text() == "127.0.0.1"
         assert not widget.cf_input.isHidden()
         assert widget.cf_input.text() == "token123"
@@ -142,7 +148,9 @@ def test_site_type_widget_field_changes():
         # Change name and port
         widget.name_input.setText("Renamed Site")
         assert widget.sites[0]["name"] == "Renamed Site"
-        assert widget.site_list.item(0).text() == "Renamed Site"
+        item = widget.site_list.item(0)
+        assert item is not None
+        assert item.text() == "Renamed Site"
 
         # Invalid port text falls back gracefully
         widget.port_input.setText("invalid_port")
@@ -166,7 +174,7 @@ def test_site_type_widget_field_changes():
 
         # Change field when current_index is invalid
         widget.current_index = -1
-        widget._on_field_changed()
+        widget.on_field_changed()
 
 
 def test_site_type_widget_server_field_changes():
@@ -203,16 +211,18 @@ def test_site_type_widget_new_site():
         "usbip_gui.gui.menu.site_config.load_sites", return_value=mock_sites
     ):
         widget = SiteTypeWidget("client")
-        widget._on_new_site()
+        widget.on_new_site()
         assert widget.site_list.count() == 3
-        assert widget.site_list.item(2).text() == "New Site 3"
+        item = widget.site_list.item(2)
+        assert item is not None
+        assert item.text() == "New Site 3"
         assert widget.sites[2]["name"] == "New Site 3"
         assert widget.sites[2]["host"] == "127.0.0.1"
 
     # Test server new site defaults
     with patch("usbip_gui.gui.menu.site_config.load_sites", return_value=[]):
         widget_server = SiteTypeWidget("server")
-        widget_server._on_new_site()
+        widget_server.on_new_site()
         assert widget_server.sites[0]["bind_ip"] == "0.0.0.0"
         assert widget_server.sites[0]["cloudflared_token"] == ""
 
@@ -230,7 +240,7 @@ def test_site_type_widget_delete_site():
 
         # Invalid index deletion does nothing
         widget.current_index = -1
-        widget._on_delete_site()
+        widget.on_delete_site()
         assert len(widget.sites) == 2
 
         # User clicks "No"
@@ -239,7 +249,7 @@ def test_site_type_widget_delete_site():
             "usbip_gui.gui.menu.site_config.QMessageBox.question",
             return_value=QMessageBox.StandardButton.No,
         ):
-            widget._on_delete_site()
+            widget.on_delete_site()
             assert len(widget.sites) == 2
 
         # User clicks "Yes"
@@ -247,13 +257,13 @@ def test_site_type_widget_delete_site():
             "usbip_gui.gui.menu.site_config.QMessageBox.question",
             return_value=QMessageBox.StandardButton.Yes,
         ):
-            widget._on_delete_site()
+            widget.on_delete_site()
             assert len(widget.sites) == 1
             assert widget.sites[0]["name"] == "Site B"
 
             # Delete the remaining site -> transitions to empty state
             widget.current_index = 0
-            widget._on_delete_site()
+            widget.on_delete_site()
             assert len(widget.sites) == 0
             assert widget.form_widget.isHidden()
             assert not widget.empty_widget.isHidden()
@@ -274,7 +284,7 @@ def test_site_type_widget_browse_cloudflared():
             "usbip_gui.gui.menu.site_config.QFileDialog.getOpenFileName",
             return_value=("", ""),
         ):
-            widget._on_browse_cloudflared()
+            widget.on_browse_cloudflared()
             assert widget.cf_path_input.text() == ""
 
         # Select valid executable
@@ -282,7 +292,7 @@ def test_site_type_widget_browse_cloudflared():
             "usbip_gui.gui.menu.site_config.QFileDialog.getOpenFileName",
             return_value=("/custom/cloudflared", ""),
         ):
-            widget._on_browse_cloudflared()
+            widget.on_browse_cloudflared()
             assert widget.cf_path_input.text() == "/custom/cloudflared"
             assert widget.sites[0]["cloudflared_path"] == "/custom/cloudflared"
 
@@ -297,7 +307,7 @@ def test_site_config_dialog_validation_and_save():
     with patch(
         "usbip_gui.gui.menu.site_config.QMessageBox.warning"
     ) as mock_warn:
-        assert dialog._validate_sites(dialog.client_widget) is False
+        assert dialog.validate_sites(dialog.client_widget) is False
         mock_warn.assert_called_once()
 
     # Duplicate site name
@@ -308,7 +318,7 @@ def test_site_config_dialog_validation_and_save():
     with patch(
         "usbip_gui.gui.menu.site_config.QMessageBox.warning"
     ) as mock_warn:
-        assert dialog._validate_sites(dialog.client_widget) is False
+        assert dialog.validate_sites(dialog.client_widget) is False
         mock_warn.assert_called_once()
 
     # Invalid port (out of range or non-numeric)
@@ -316,48 +326,279 @@ def test_site_config_dialog_validation_and_save():
     with patch(
         "usbip_gui.gui.menu.site_config.QMessageBox.warning"
     ) as mock_warn:
-        assert dialog._validate_sites(dialog.client_widget) is False
+        assert dialog.validate_sites(dialog.client_widget) is False
         mock_warn.assert_called_once()
 
     dialog.client_widget.sites = [{"name": "Site 1", "port": "abc"}]
     with patch(
         "usbip_gui.gui.menu.site_config.QMessageBox.warning"
     ) as mock_warn:
-        assert dialog._validate_sites(dialog.client_widget) is False
+        assert dialog.validate_sites(dialog.client_widget) is False
         mock_warn.assert_called_once()
 
     # Valid sites
     dialog.client_widget.sites = [{"name": "Client Site", "port": 3240}]
     dialog.server_widget.sites = [{"name": "Server Site", "port": 3240}]
-    assert dialog._validate_sites(dialog.client_widget) is True
-    assert dialog._validate_sites(dialog.server_widget) is True
+    assert dialog.validate_sites(dialog.client_widget) is True
+    assert dialog.validate_sites(dialog.server_widget) is True
 
-    # Test _on_save failure on client tab
+    # Test on_save failure on client tab
     dialog.client_widget.sites = [{"name": "", "port": 3240}]
     with patch("usbip_gui.gui.menu.site_config.QMessageBox.warning"):
-        dialog._on_save()
+        dialog.on_save()
         assert dialog.tabs.currentWidget() == dialog.client_widget
 
-    # Test _on_save failure on server tab
+    # Test on_save failure on server tab
     dialog.client_widget.sites = [{"name": "Client Site", "port": 3240}]
     dialog.server_widget.sites = [{"name": "", "port": 3240}]
     with patch("usbip_gui.gui.menu.site_config.QMessageBox.warning"):
-        dialog._on_save()
+        dialog.on_save()
         assert dialog.tabs.currentWidget() == dialog.server_widget
 
-    # Test _on_save success
+    # Test on_save success (saves sites without closing dialog)
     dialog.server_widget.sites = [{"name": "Server Site", "port": 3240}]
     with patch("usbip_gui.gui.menu.site_config.save_all_sites") as mock_save:
         with patch.object(dialog, "accept") as mock_accept:
-            dialog._on_save()
+            dialog.on_save()
             assert mock_save.call_count == 2
-            mock_accept.assert_called_once()
+            mock_accept.assert_not_called()
+            assert not dialog.save_status_label.isHidden()
+            assert dialog.save_status_label.text() == "✓ Saved"
+            dialog.hide_save_status()
+            assert dialog.save_status_label.isHidden()
+
+    # Test Save Sites and Close buttons and reject
+    assert dialog.save_btn.text() == "Save Sites"
+    assert dialog.close_btn.text() == "Close"
+    dialog.show_save_status()
+    with patch.object(dialog, "accept") as mock_accept:
+        dialog.close_btn.click()
+        mock_accept.assert_called_once()
+    assert dialog.save_status_timer is not None
+    dialog.reject()
+    assert dialog.save_status_timer.isActive() is False
 
 
 @patch("usbip_gui.gui.menu.site_config.SiteConfigDialog")
 def test_show_site_config_dialog(mock_dialog_cls: MagicMock):
     """Test show_site_config_dialog instantiates and executes dialog."""
     parent = MagicMock()
-    show_site_config_dialog(parent)
-    mock_dialog_cls.assert_called_once_with(parent)
-    mock_dialog_cls.return_value.exec.assert_called_once()
+    with patch(
+        "usbip_gui.gui.menu.site_config.is_master_password_configured",
+        return_value=False,
+    ):
+        show_site_config_dialog(parent)
+        mock_dialog_cls.assert_called_once_with(parent)
+        mock_dialog_cls.return_value.exec.assert_called_once()
+
+
+def test_show_site_config_dialog_when_locked():
+    """Test show_site_config_dialog prompts unlock when locked."""
+    with patch(
+        "usbip_gui.gui.menu.site_config.is_master_password_configured",
+        return_value=True,
+    ):
+        with patch(
+            "usbip_gui.gui.menu.site_config.is_master_password_unlocked",
+            return_value=False,
+        ):
+            # When ensure_unlocked returns False, dialog is not shown
+            with patch(
+                "usbip_gui.gui.menu.site_config.ensure_unlocked",
+                return_value=False,
+            ):
+                with patch(
+                    "usbip_gui.gui.menu.site_config.SiteConfigDialog"
+                ) as mock_dlg:
+                    show_site_config_dialog(None)
+                    mock_dlg.assert_not_called()
+
+            # When ensure_unlocked returns True, dialog is shown
+            with patch(
+                "usbip_gui.gui.menu.site_config.ensure_unlocked",
+                return_value=True,
+            ):
+                with patch(
+                    "usbip_gui.gui.menu.site_config.SiteConfigDialog"
+                ) as mock_dlg:
+                    show_site_config_dialog(None)
+                    mock_dlg.assert_called_once()
+
+
+def test_site_config_dialog_security_button():
+    """Test security button opens appropriate master password dialog."""
+    dialog = SiteConfigDialog()
+
+    # When not configured: opens SetMasterPasswordDialog
+    with patch(
+        "usbip_gui.gui.menu.site_config.is_master_password_configured",
+        return_value=False,
+    ):
+        with patch(
+            "usbip_gui.gui.menu.site_config.SetMasterPasswordDialog"
+        ) as mock_set:
+            dialog.security_btn.click()
+            mock_set.assert_called_once_with(dialog)
+
+    # When configured: opens MasterPasswordManagementDialog
+    with patch(
+        "usbip_gui.gui.menu.site_config.is_master_password_configured",
+        return_value=True,
+    ):
+        with patch(
+            "usbip_gui.gui.menu.site_config.MasterPasswordManagementDialog"
+        ) as mock_mgmt:
+            dialog.security_btn.click()
+            mock_mgmt.assert_called_once_with(dialog)
+
+
+def test_site_type_widget_reload_sites():
+    """Test reload_sites updates sites list and form."""
+    widget = SiteTypeWidget("client")
+    with patch(
+        "usbip_gui.gui.menu.site_config.load_sites",
+        return_value=[{"name": "ReloadedSite", "port": 3240}],
+    ):
+        widget.reload_sites()
+        assert widget.site_list.count() == 1
+        assert widget.name_input.text() == "ReloadedSite"
+
+
+def test_site_config_dialog_exec_guard():
+    """Test SiteConfigDialog.exec guards against locked master password."""
+    with patch("usbip_gui.gui.menu.site_config.load_sites", return_value=[]):
+        dialog = SiteConfigDialog(None)
+
+    # 1. Master password configured and ensure_unlocked returns False
+    with patch(
+        "usbip_gui.gui.menu.site_config.is_master_password_configured",
+        return_value=True,
+    ):
+        with patch(
+            "usbip_gui.gui.menu.site_config.is_master_password_unlocked",
+            return_value=False,
+        ):
+            with patch(
+                "usbip_gui.gui.menu.site_config.ensure_unlocked",
+                return_value=False,
+            ):
+                with patch(
+                    "usbip_gui.gui.menu.site_config.lock_master_password"
+                ) as mock_lock:
+                    res = dialog.exec()
+                    assert res == int(QDialog.DialogCode.Rejected)
+                    mock_lock.assert_not_called()
+
+    # 2. Master password configured and ensure_unlocked returns True
+    with patch(
+        "usbip_gui.gui.menu.site_config.is_master_password_configured",
+        return_value=True,
+    ):
+        with patch(
+            "usbip_gui.gui.menu.site_config.is_master_password_unlocked",
+            return_value=False,
+        ):
+            with patch(
+                "usbip_gui.gui.menu.site_config.ensure_unlocked",
+                return_value=True,
+            ):
+                with patch.object(
+                    QDialog,
+                    "exec",
+                    return_value=int(QDialog.DialogCode.Accepted),
+                ):
+                    with patch.object(
+                        dialog.client_widget, "reload_sites"
+                    ) as mock_reload_c:
+                        with patch.object(
+                            dialog.server_widget, "reload_sites"
+                        ) as mock_reload_s:
+                            with patch(
+                                "usbip_gui.gui.menu.site_config"
+                                ".lock_master_password"
+                            ) as mock_lock:
+                                res = dialog.exec()
+                                assert res == int(QDialog.DialogCode.Accepted)
+                                mock_reload_c.assert_called_once()
+                                mock_reload_s.assert_called_once()
+                                mock_lock.assert_called_once()
+
+
+def test_site_type_widget_status_icons_and_modification() -> None:
+    """Test site list status icons for saved vs modified vs new sites."""
+    initial_site = {
+        "name": "Initial Site",
+        "connection_type": "direct",
+        "port": 3240,
+        "secure": True,
+        "password": "secret",
+        "cloudflared_path": "",
+        "host": "192.168.1.10",
+        "cloudflared_hostname": "",
+        "cloudflared_token_id": "",
+        "cloudflared_token_secret": "",
+    }
+    with patch(
+        "usbip_gui.gui.menu.site_config.load_sites",
+        return_value=[initial_site],
+    ):
+        widget = SiteTypeWidget("client", None)
+
+    # Clean site initially has saved icon and tooltip
+    assert widget.site_list.count() == 1
+    item = widget.site_list.item(0)
+    assert item is not None
+    assert item.toolTip() == "Saved"
+    assert widget.is_site_modified(widget.sites[0]) is False
+
+    # Modifying field updates status to unsaved
+    widget.name_input.setText("Modified Name")
+    assert widget.is_site_modified(widget.sites[0]) is True
+    assert item.toolTip() == "Unsaved changes"
+
+    # Restoring name restores saved status
+    widget.name_input.setText("Initial Site")
+    assert widget.is_site_modified(widget.sites[0]) is False
+    assert item.toolTip() == "Saved"
+
+    # Adding a new site gives it unsaved icon
+    widget.on_new_site()
+    assert widget.site_list.count() == 2
+    new_item = widget.site_list.item(1)
+    assert new_item is not None
+    assert new_item.toolTip() == "Unsaved changes"
+    assert widget.is_site_modified(widget.sites[1]) is True
+
+    # Calling mark_saved updates all items to saved status
+    widget.mark_saved()
+    assert item.toolTip() == "Saved"
+    assert new_item.toolTip() == "Saved"
+    assert widget.is_site_modified(widget.sites[0]) is False
+    assert widget.is_site_modified(widget.sites[1]) is False
+
+
+def test_site_normalization_and_icons() -> None:
+    """Test normalize_site and icon generators."""
+    # Test icon generators
+    saved_icon = get_saved_icon()
+    unsaved_icon = get_unsaved_icon()
+    assert not saved_icon.isNull()
+    assert not unsaved_icon.isNull()
+    assert not create_status_icon(True).isNull()
+    assert not create_status_icon(False).isNull()
+
+    # Test normalize_site client with string/invalid port
+    norm_client = normalize_site(
+        {"name": "Client", "port": "invalid_port"},
+        "client",
+    )
+    assert norm_client["port"] == "invalid_port"
+    assert "host" in norm_client
+
+    # Test normalize_site server
+    norm_server = normalize_site(
+        {"name": "Server", "port": 3240},
+        "server",
+    )
+    assert norm_server["port"] == 3240
+    assert "bind_ip" in norm_server
