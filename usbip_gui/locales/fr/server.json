@@ -1,6 +1,11 @@
 {
     "no selection to bind": "aucune sélection à associer",
     " bound successfully": " associé avec succès",
+    "Site:": "Site :",
+    "Connect": "Démarrer",
+    "Manual / Default": "Manuel / Défaut",
+    "Tunnel token required for Cloudflare Tunnel server.": "Jeton de tunnel requis pour le serveur Tunnel Cloudflare.",
+    "Failed to start Cloudflare Tunnel: {}": "Échec du démarrage du Tunnel Cloudflare : {}",
     "no selection to unbind": "aucune sélection à dissocier",
     " unbound succesfully": " dissocié avec succès",
     "Local USB Devices": "Périphériques USB locaux",

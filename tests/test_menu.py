@@ -90,3 +90,20 @@ def test_toggle_language_back_to_english(
 
     toggle_language()
     mock_set_language.assert_called_once_with("en")
+
+
+@patch("usbip_gui.gui.menu.menu.QActionGroup")
+@patch("usbip_gui.gui.menu.menu.QAction")
+@patch("usbip_gui.gui.menu.menu.show_site_config_dialog")
+def test_main_menu_site_config_callback(
+    mock_show_dialog: MagicMock,
+    _mock_action: MagicMock,
+    _mock_group: MagicMock,
+):
+    """Test site config callback in main menu."""
+    mock_app = MagicMock()
+    with patch("usbip_gui.gui.menu.menu.connect_signal") as mock_connect:
+        create_main_menu(mock_app)
+        site_config_cb = mock_connect.call_args_list[0].args[1]
+        site_config_cb()
+        mock_show_dialog.assert_called_with(mock_app.root)

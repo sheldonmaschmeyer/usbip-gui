@@ -1,6 +1,11 @@
 {
     "no selection to attach": "",
     "no selection to detach": "",
+    "Site:": "",
+    "Connect": "",
+    "Manual / Direct": "",
+    "Cloudflare hostname required for Cloudflare Tunnel connection.": "",
+    "Failed to start Cloudflare Tunnel: {}": "",
     "Remote USB Devices for ": "",
     "Attach Device": "",
     "Attached Devices": "",

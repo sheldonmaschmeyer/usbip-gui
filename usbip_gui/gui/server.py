@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QTreeWidget,
     QMessageBox,
+    QComboBox,
 )
 
 from usbip_gui.typings import connect_signal, set_header_labels
@@ -29,6 +30,12 @@ from usbip_gui.common import (
     set_min_column_widths,
     elevate_command,
     run_elevated,
+    resolve_cloudflared_executable,
+    load_sites,
+    get_site,
+    get_selected_site_name,
+    set_selected_site_name,
+    sites_updated,
 )
 from usbip_gui.common.common import configure_tree_widget_interaction
 from usbip_gui.product_detection import (
@@ -57,11 +64,15 @@ def local_device_columns() -> List[str]:
     return cols
 
 
+# pylint: disable=too-many-arguments,too-many-positional-arguments
 def init_usbip_server(
     port: int = 3240,
     secure: bool = False,
     password: str = "",
     bind_host: str = "0.0.0.0",
+    use_cloudflared: bool = False,
+    cloudflared_token: str = "",
+    cloudflared_path: str = "",
 ):
     """Init usbip server."""
     if sys.platform != "win32":
@@ -74,6 +85,34 @@ def init_usbip_server(
         except OSError:
             pass
         tunnel_state.server_process = None
+
+    if tunnel_state.cloudflared_server_process:
+        try:
+            tunnel_state.cloudflared_server_process.terminate()
+            tunnel_state.cloudflared_server_process.wait()
+        except OSError:
+            pass
+        tunnel_state.cloudflared_server_process = None
+
+    if use_cloudflared and cloudflared_token:
+        cloudflared_exe = resolve_cloudflared_executable(cloudflared_path)
+
+        def run_cf_server():
+            with subprocess.Popen(
+                [
+                    cloudflared_exe,
+                    "tunnel",
+                    "run",
+                    "--token",
+                    cloudflared_token,
+                ]
+            ) as process:
+                tunnel_state.cloudflared_server_process = process
+                process.wait()
+                if tunnel_state.cloudflared_server_process is process:
+                    tunnel_state.cloudflared_server_process = None
+
+        threading.Thread(target=run_cf_server, daemon=True).start()
 
     if secure:
         if sys.platform != "win32":
@@ -245,7 +284,7 @@ class ServerTab(QWidget):
 
     def __init__(self, parent: QWidget | None = None):
         """Initialize the class instance."""
-        # pylint: disable=duplicate-code
+        # pylint: disable=duplicate-code,too-many-statements
         super().__init__(parent)
 
         self._item_updater = ItemUpdater(self)
@@ -257,6 +296,17 @@ class ServerTab(QWidget):
 
         # Control Frame 1 (top row)
         self.local_control_layout1 = QHBoxLayout()
+        self.local_site_label = QLabel(t("Site:"))
+        self.local_site_combo = QComboBox()
+        self.local_site_combo.setMinimumWidth(110)
+        connect_signal(
+            self.local_site_combo.currentIndexChanged, self._on_site_selected
+        )
+        connect_signal(sites_updated.changed, self._on_sites_updated)
+
+        self.local_connect_button = QPushButton(t("Connect"))
+        connect_signal(self.local_connect_button.clicked, self.restart_server)
+
         self.local_list_label = QLabel(t("Local USB Devices"))
         self.local_port_label = QLabel(t("Port "))
         self.local_port_input = QLineEdit()
@@ -297,6 +347,9 @@ class ServerTab(QWidget):
             self.local_regen_cert_button.clicked, self.regenerate_cert
         )
 
+        self.local_control_layout1.addWidget(self.local_site_label)
+        self.local_control_layout1.addWidget(self.local_site_combo)
+        self.local_control_layout1.addWidget(self.local_connect_button)
         self.local_control_layout1.addWidget(self.local_list_label)
         self.local_control_layout1.addWidget(self.local_port_label)
         self.local_control_layout1.addWidget(self.local_port_input)
@@ -310,6 +363,8 @@ class ServerTab(QWidget):
         )
         self.local_control_layout1.addWidget(self.local_regen_cert_button)
         self.local_control_layout1.addStretch()
+
+        self._populate_site_combo()
 
         # Control Frame 2 (actions)
         self.local_actions_layout = QHBoxLayout()
@@ -419,6 +474,59 @@ class ServerTab(QWidget):
         for i in range(len(local_device_columns())):
             self.local_listbox.resizeColumnToContents(i)
 
+    def _populate_site_combo(self) -> None:
+        """Populate the site dropdown with saved server sites."""
+        current_data = self.local_site_combo.currentData()
+        selected_name = (
+            str(current_data)
+            if current_data
+            else get_selected_site_name("server")
+        )
+        self.local_site_combo.blockSignals(True)
+        self.local_site_combo.clear()
+        self.local_site_combo.addItem(t("Manual / Default"), "")
+        saved_sites = load_sites("server")
+        selected_idx = 0
+        for idx, site in enumerate(saved_sites, start=1):
+            name = str(site.get("name", ""))
+            self.local_site_combo.addItem(name, name)
+            if name == selected_name:
+                selected_idx = idx
+        self.local_site_combo.setCurrentIndex(selected_idx)
+        self.local_site_combo.blockSignals(False)
+
+    def _on_sites_updated(self, site_type: str) -> None:
+        """Handle site configuration updates."""
+        if site_type == "server":
+            self._populate_site_combo()
+
+    def _on_site_selected(self, _index: int) -> None:
+        """Handle selection change in site dropdown."""
+        site_name = str(self.local_site_combo.currentData() or "")
+        set_selected_site_name("server", site_name)
+        if not site_name:
+            return
+        site = get_site("server", site_name)
+        if not site:
+            return
+        self.local_port_input.setText(str(site.get("port", USBIPD_PORT)))
+        self.local_bind_ip_input.setText(str(site.get("bind_ip", "0.0.0.0")))
+        self.local_secure_checkbox.blockSignals(True)
+        self.local_secure_checkbox.setChecked(bool(site.get("secure", True)))
+        self.local_secure_checkbox.blockSignals(False)
+        self.local_password_input.setText(str(site.get("password", "")))
+
+    def _get_active_cf_settings(self) -> Tuple[bool, str, str]:
+        """Return (use_cf, cf_token, cf_path) based on active site."""
+        site_name = str(self.local_site_combo.currentData() or "")
+        if site_name:
+            site = get_site("server", site_name)
+            if site and site.get("connection_type") == "cloudflared":
+                token = str(site.get("cloudflared_token") or "").strip()
+                cf_path = str(site.get("cloudflared_path") or "").strip()
+                return True, token, cf_path
+        return False, "", ""
+
     def restart_server(self):
         """Restart server."""
         try:
@@ -434,7 +542,31 @@ class ServerTab(QWidget):
             )
             return
         bind_host = self.local_bind_ip_input.text().strip() or "0.0.0.0"
-        init_usbip_server(port, secure, password, bind_host)
+
+        try:
+            use_cf, cf_token, cf_path = self._get_active_cf_settings()
+        except (ValueError, TypeError):
+            use_cf, cf_token, cf_path = False, "", ""
+        if use_cf and not cf_token:
+            QMessageBox.critical(
+                self,
+                t("Error"),
+                t("Tunnel token required for Cloudflare Tunnel server."),
+            )
+            return
+
+        if use_cf:
+            init_usbip_server(
+                port,
+                secure,
+                password,
+                bind_host,
+                use_cloudflared=True,
+                cloudflared_token=cf_token,
+                cloudflared_path=cf_path,
+            )
+        else:
+            init_usbip_server(port, secure, password, bind_host)
 
     def bind_local(self):
         """Bind local."""

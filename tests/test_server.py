@@ -440,3 +440,173 @@ def test_bind_unbind_local_usb_win32(
     mock_run_elevated.assert_called_with(
         ["usbipd", "unbind", "--busid", "1-1"]
     )
+
+
+@patch("usbip_gui.gui.server.resolve_cloudflared_executable")
+@patch("usbip_gui.gui.server.subprocess.Popen")
+@patch("usbip_gui.gui.server.threading.Thread")
+@patch("usbip_gui.gui.server.subprocess.run")
+def test_init_usbip_server_cloudflared(
+    _mock_run: MagicMock,
+    mock_thread: MagicMock,
+    mock_popen: MagicMock,
+    mock_resolve: MagicMock,
+):
+    """Test init_usbip_server with cloudflared enabled."""
+    from usbip_gui.common import tunnel_state
+
+    # Test terminating existing cloudflared process and handling OSError
+    old_proc = MagicMock()
+    old_proc.terminate.side_effect = OSError("failed")
+    tunnel_state.cloudflared_server_process = old_proc
+
+    mock_resolve.return_value = "/usr/bin/cloudflared"
+
+    def execute_thread_target(target=None, **_kwargs):
+        thread_mock = MagicMock()
+        if target:
+            target()
+        return thread_mock
+
+    mock_thread.side_effect = execute_thread_target
+    mock_proc_instance = MagicMock()
+    mock_proc_instance.__enter__.return_value = mock_proc_instance
+    mock_popen.return_value = mock_proc_instance
+
+    init_usbip_server(
+        port=3240,
+        secure=False,
+        use_cloudflared=True,
+        cloudflared_token="token123",
+        cloudflared_path="/usr/bin/cloudflared",
+    )
+    mock_resolve.assert_called_with("/usr/bin/cloudflared")
+    mock_popen.assert_called_with(
+        [
+            "/usr/bin/cloudflared",
+            "tunnel",
+            "run",
+            "--token",
+            "token123",
+        ]
+    )
+    assert tunnel_state.cloudflared_server_process is None
+
+
+@patch("usbip_gui.gui.server.set_selected_site_name")
+def test_server_tab_site_selection(mock_set: MagicMock):
+    """Test ServerTab site combo population, updates, and selection."""
+    with patch("usbip_gui.gui.server.list_local_usb", return_value=[]):
+        tab = ServerTab(None)
+
+    # Test _populate_site_combo with saved sites
+    mock_sites = [
+        {
+            "name": "Local Server",
+            "connection_type": "direct",
+            "port": 3240,
+            "bind_ip": "127.0.0.1",
+            "secure": False,
+            "password": "",
+        },
+        {
+            "name": "Cloudflare Server",
+            "connection_type": "cloudflared",
+            "port": 3240,
+            "bind_ip": "0.0.0.0",
+            "secure": True,
+            "password": "secret",
+            "cloudflared_token": "token-abc",
+            "cloudflared_path": "/opt/cf",
+        },
+    ]
+
+    with patch(
+        "usbip_gui.gui.server.load_sites", return_value=mock_sites
+    ), patch(
+        "usbip_gui.gui.server.get_selected_site_name",
+        return_value="Cloudflare Server",
+    ):
+        tab._populate_site_combo()
+        assert tab.local_site_combo.count() == 3
+        assert tab.local_site_combo.currentText() == "Cloudflare Server"
+
+    # Test _on_sites_updated
+    with patch.object(tab, "_populate_site_combo") as mock_pop:
+        tab._on_sites_updated("client")
+        mock_pop.assert_not_called()
+        tab._on_sites_updated("server")
+        mock_pop.assert_called_once()
+
+    # Test _on_site_selected with empty site
+    tab.local_site_combo.setCurrentIndex(0)
+    tab._on_site_selected(0)
+    mock_set.assert_called_with("server", "")
+
+    # Test _on_site_selected with non-existent site
+    tab.local_site_combo.setCurrentIndex(1)
+    with patch("usbip_gui.gui.server.get_site", return_value=None):
+        tab._on_site_selected(1)
+
+    # Test _on_site_selected with valid cloudflared site
+    cf_site = mock_sites[1]
+    with patch("usbip_gui.gui.server.get_site", return_value=cf_site):
+        tab.local_site_combo.setCurrentIndex(2)
+        tab._on_site_selected(2)
+        assert tab.local_port_input.text() == "3240"
+        assert tab.local_bind_ip_input.text() == "0.0.0.0"
+        assert tab.local_secure_checkbox.isChecked() is True
+        assert tab.local_password_input.text() == "secret"
+
+    # Test _get_active_cf_settings (cloudflared site)
+    with patch("usbip_gui.gui.server.get_site", return_value=cf_site):
+        use_cf, token, path = tab._get_active_cf_settings()
+        assert use_cf is True
+        assert token == "token-abc"
+        assert path == "/opt/cf"
+
+    # Test _get_active_cf_settings (direct site)
+    direct_site = mock_sites[0]
+    with patch("usbip_gui.gui.server.get_site", return_value=direct_site):
+        use_cf, token, path = tab._get_active_cf_settings()
+        assert use_cf is False
+        assert token == ""
+        assert path == ""
+
+
+@patch("usbip_gui.gui.server.init_usbip_server")
+@patch("usbip_gui.gui.server.QMessageBox.critical")
+def test_restart_server_cloudflared_validation_and_success(
+    mock_critical: MagicMock, mock_init: MagicMock
+):
+    """Test restart_server validation and invocation with cloudflared."""
+    tab = MagicMock()
+    tab.local_port_input.text.return_value = "3240"
+    tab.local_secure_checkbox.isChecked.return_value = False
+    tab.local_password_input.text.return_value = ""
+    tab.local_bind_ip_input.text.return_value = "0.0.0.0"
+
+    # Case 1: use_cf=True but missing token
+    tab._get_active_cf_settings.return_value = (True, "", "")
+    ServerTab.restart_server(tab)
+    mock_critical.assert_called_once()
+    mock_init.assert_not_called()
+
+    # Case 2: use_cf=True with valid token
+    mock_critical.reset_mock()
+    tab._get_active_cf_settings.return_value = (
+        True,
+        "valid-token",
+        "/opt/cloudflared",
+    )
+    ServerTab.restart_server(tab)
+    mock_critical.assert_not_called()
+    mock_init.assert_called_once_with(
+        3240,
+        False,
+        "",
+        "0.0.0.0",
+        use_cloudflared=True,
+        cloudflared_token="valid-token",
+        cloudflared_path="/opt/cloudflared",
+    )

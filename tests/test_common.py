@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Callable
 from unittest.mock import patch, MagicMock
 from PyQt6.QtWidgets import QTreeWidget
+import pytest
 from usbip_gui.common import (
     TunnelState,
     cleanup_tunnels,
@@ -23,6 +24,7 @@ from usbip_gui.common import (
     language_changed,
     elevate_command,
     run_elevated,
+    resolve_cloudflared_executable,
 )
 import usbip_gui.common.privilege as privilege_mod
 
@@ -584,3 +586,75 @@ def test_set_language(
         language_changed.changed.disconnect(received.append)  # pyright: ignore
         language_changed.current = None
         os.environ.pop("LANGUAGE", None)
+
+
+def test_cleanup_tunnels_cloudflared():
+    """Test cleanup_tunnels terminates cloudflared processes."""
+    mock_server = MagicMock()
+    mock_client = MagicMock()
+    tunnel_state.cloudflared_server_process = mock_server
+    tunnel_state.cloudflared_client_processes = {
+        "usbip.maschmeyer.ca": (3240, mock_client)
+    }
+    cleanup_tunnels()
+    mock_server.terminate.assert_called_once()
+    mock_client.terminate.assert_called_once()
+    tunnel_state.cloudflared_server_process = None
+    tunnel_state.cloudflared_client_processes = {}
+
+
+def test_cleanup_tunnels_cloudflared_oserror():
+    """Test cleanup_tunnels suppresses OSError on terminate."""
+    mock_server = MagicMock()
+    mock_server.terminate.side_effect = OSError("term failed")
+    mock_client = MagicMock()
+    mock_client.terminate.side_effect = OSError("term failed")
+    tunnel_state.cloudflared_server_process = mock_server
+    tunnel_state.cloudflared_client_processes = {
+        "usbip.maschmeyer.ca": (3240, mock_client)
+    }
+    cleanup_tunnels()
+    tunnel_state.cloudflared_server_process = None
+    tunnel_state.cloudflared_client_processes = {}
+
+
+def test_resolve_cloudflared_executable_custom_path():
+    """Test resolve_cloudflared_executable with custom path."""
+    with patch("os.path.isfile", return_value=True):
+        assert (
+            resolve_cloudflared_executable("/custom/cloudflared")
+            == "/custom/cloudflared"
+        )
+
+
+def test_resolve_cloudflared_executable_env_candidate_win32():
+    """Test resolve_cloudflared_executable finding env candidate on win32."""
+    with patch("sys.platform", "win32"):
+        with patch("os.path.isfile") as mock_isfile:
+            mock_isfile.side_effect = lambda p: "Library" in p
+            res = resolve_cloudflared_executable()
+            assert "cloudflared.exe" in res
+
+
+def test_resolve_cloudflared_executable_env_candidate_linux():
+    """Test resolve_cloudflared_executable finding env candidate on linux."""
+    with patch("sys.platform", "linux"):
+        with patch("os.path.isfile") as mock_isfile:
+            mock_isfile.side_effect = lambda p: "bin/cloudflared" in p
+            res = resolve_cloudflared_executable()
+            assert "cloudflared" in res
+
+
+def test_resolve_cloudflared_executable_which():
+    """Test resolve_cloudflared_executable falling back to shutil.which."""
+    with patch("os.path.isfile", return_value=False):
+        with patch("shutil.which", return_value="/usr/bin/cloudflared"):
+            assert resolve_cloudflared_executable() == "/usr/bin/cloudflared"
+
+
+def test_resolve_cloudflared_executable_not_found():
+    """Test resolve_cloudflared_executable raises FileNotFoundError."""
+    with patch("os.path.isfile", return_value=False):
+        with patch("shutil.which", return_value=None):
+            with pytest.raises(FileNotFoundError):
+                resolve_cloudflared_executable()

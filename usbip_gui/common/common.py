@@ -4,6 +4,7 @@ import atexit
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -116,8 +117,14 @@ class TunnelState:
     def __init__(self) -> None:
         """Initialize the class instance."""
         self.server_process: Optional[subprocess.Popen[bytes]] = None
+        self.cloudflared_server_process: Optional[
+            subprocess.Popen[bytes]
+        ] = None
         self.client_processes: Dict[
             Tuple[str, int], Tuple[int, subprocess.Popen[bytes], str]
+        ] = {}
+        self.cloudflared_client_processes: Dict[
+            str, Tuple[int, subprocess.Popen[bytes]]
         ] = {}
 
 
@@ -131,7 +138,17 @@ def cleanup_tunnels() -> None:
             tunnel_state.server_process.terminate()
         except OSError:
             pass
+    if tunnel_state.cloudflared_server_process:
+        try:
+            tunnel_state.cloudflared_server_process.terminate()
+        except OSError:
+            pass
     for _port, proc, _pwd in tunnel_state.client_processes.values():
+        try:
+            proc.terminate()
+        except OSError:
+            pass
+    for _port, proc in tunnel_state.cloudflared_client_processes.values():
         try:
             proc.terminate()
         except OSError:
@@ -139,6 +156,40 @@ def cleanup_tunnels() -> None:
 
 
 atexit.register(cleanup_tunnels)
+
+
+def resolve_cloudflared_executable(custom_path: str = "") -> str:
+    """
+    Resolve the path to the cloudflared executable.
+
+    Checks:
+    1. A specified custom path if valid.
+    2. The active Python/pixi environment prefix.
+    3. The system PATH.
+    """
+    if custom_path and os.path.isfile(custom_path):
+        return custom_path
+
+    if sys.platform == "win32":
+        env_candidate = os.path.join(
+            sys.prefix, "Library", "bin", "cloudflared.exe"
+        )
+    else:
+        env_candidate = os.path.join(sys.prefix, "bin", "cloudflared")
+
+    if os.path.isfile(env_candidate):
+        return env_candidate
+
+    which_match = shutil.which("cloudflared.exe") or shutil.which(
+        "cloudflared"
+    )
+    if which_match:
+        return which_match
+
+    raise FileNotFoundError(
+        "cloudflared executable not found in PATH or environment. "
+        "Please install cloudflared or specify its path in Site Configuration."
+    )
 
 
 class SortableTreeWidgetItem(QTreeWidgetItem):

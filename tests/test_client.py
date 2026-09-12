@@ -17,6 +17,7 @@ from usbip_gui.gui.client import (
     parse_remote_list,
     parse_attached_list,
     get_or_create_client_tunnel,
+    get_or_create_cloudflared_client_tunnel,
     list_remote_usb,
     list_attached_usb,
     attach_remote_usb,
@@ -1322,3 +1323,321 @@ def test_attach_remote_ui_error_details_with_hint(
     assert "Exit code: 106" in msg
     assert "USB/IP driver/service is not ready" in msg
     tab.refresh_remote.assert_not_called()
+
+
+@patch("usbip_gui.gui.client.time.sleep")
+@patch("usbip_gui.gui.client.threading.Thread")
+@patch("usbip_gui.gui.client.subprocess.Popen")
+@patch("usbip_gui.gui.client.resolve_cloudflared_executable")
+def test_get_or_create_cloudflared_client_tunnel(
+    mock_resolve: MagicMock,
+    mock_popen: MagicMock,
+    mock_thread: MagicMock,
+    mock_sleep: MagicMock,
+):
+    """Test get_or_create_cloudflared_client_tunnel lifecycle."""
+    from usbip_gui.common import tunnel_state
+
+    # 1. Existing active process returns cached port
+    mock_active = MagicMock()
+    mock_active.poll.return_value = None
+    tunnel_state.cloudflared_client_processes["host1"] = (42000, mock_active)
+    ip, port = get_or_create_cloudflared_client_tunnel("host1")
+    assert ip == "127.0.0.1"
+    assert port == 42000
+
+    # 2. Existing dead process is cleaned up and new one spawned
+    mock_active.poll.return_value = 1
+    mock_resolve.return_value = "/usr/bin/cloudflared"
+    mock_proc = MagicMock()
+    mock_popen.return_value = mock_proc
+
+    def execute_thread(target=None, **_kwargs):
+        thread_obj = MagicMock()
+        if target:
+            target()
+        return thread_obj
+
+    mock_thread.side_effect = execute_thread
+
+    ip, port = get_or_create_cloudflared_client_tunnel(
+        "host1", "/usr/bin/cloudflared"
+    )
+    assert ip == "127.0.0.1"
+    mock_resolve.assert_called_with("/usr/bin/cloudflared")
+    mock_popen.assert_called_once()
+    mock_sleep.assert_called_with(1)
+    # watch_cf_tunnel should have run and cleared it
+    assert "host1" not in tunnel_state.cloudflared_client_processes
+
+    # 3. Test with service tokens
+    mock_popen.reset_mock()
+    ip, port = get_or_create_cloudflared_client_tunnel(
+        "host2",
+        service_token_id="tok_id_123",
+        service_token_secret="tok_sec_456",
+    )
+    assert ip == "127.0.0.1"
+    popen_args = mock_popen.call_args[0][0]
+    assert "--service-token-id" in popen_args
+    assert "tok_id_123" in popen_args
+    assert "--service-token-secret" in popen_args
+    assert "tok_sec_456" in popen_args
+
+
+@patch("usbip_gui.gui.client.subprocess.run")
+@patch("usbip_gui.gui.client.get_or_create_client_tunnel")
+@patch("usbip_gui.gui.client.get_or_create_cloudflared_client_tunnel")
+def test_list_remote_usb_cloudflared(
+    mock_cf_tunnel: MagicMock,
+    mock_direct_tunnel: MagicMock,
+    mock_subproc_run: MagicMock,
+):
+    """Test list_remote_usb with cloudflared tunnel."""
+    mock_subproc_run.return_value = MagicMock(stdout="")
+    # Failure to establish cf tunnel
+    mock_cf_tunnel.return_value = ("", 0)
+    res = list_remote_usb("server", use_cloudflared=True)
+    assert res == []
+
+    # Successful cf tunnel
+    mock_cf_tunnel.return_value = ("127.0.0.1", 45000)
+    mock_direct_tunnel.return_value = ("127.0.0.1", 45000)
+    res = list_remote_usb(
+        "default_host",
+        use_cloudflared=True,
+        cloudflared_hostname="usbip.maschmeyer.ca",
+    )
+    assert res == []
+    mock_cf_tunnel.assert_called_with(
+        "usbip.maschmeyer.ca",
+        "",
+        service_token_id="",
+        service_token_secret="",
+    )
+
+
+@patch("usbip_gui.gui.client.run_elevated")
+@patch("usbip_gui.gui.client.get_or_create_client_tunnel")
+@patch("usbip_gui.gui.client.get_or_create_cloudflared_client_tunnel")
+def test_attach_remote_usb_cloudflared(
+    mock_cf_tunnel: MagicMock,
+    mock_direct_tunnel: MagicMock,
+    mock_run: MagicMock,
+):
+    """Test attach_remote_usb with cloudflared tunnel."""
+    mock_run.return_value = MagicMock(returncode=0)
+    # Failure to establish cf tunnel
+    mock_cf_tunnel.return_value = ("", 0)
+    res = attach_remote_usb("server", "1-1", use_cloudflared=True)
+    assert res.returncode == -1
+
+    # Successful cf tunnel
+    mock_cf_tunnel.return_value = ("127.0.0.1", 45000)
+    mock_direct_tunnel.return_value = ("127.0.0.1", 45000)
+    res = attach_remote_usb(
+        "default_host",
+        "1-1",
+        use_cloudflared=True,
+        cloudflared_hostname="usbip.maschmeyer.ca",
+    )
+    assert res.returncode == 0
+    mock_cf_tunnel.assert_called_with(
+        "usbip.maschmeyer.ca",
+        "",
+        service_token_id="",
+        service_token_secret="",
+    )
+
+
+@patch("usbip_gui.gui.client.set_selected_site_name")
+@patch("usbip_gui.gui.client.QMessageBox.warning")
+def test_client_tab_site_selection_and_cf(
+    _mock_warning: MagicMock, mock_set: MagicMock
+):
+    """Test ClientTab site combo, selection, and cf settings."""
+    with patch("usbip_gui.gui.client.list_attached_usb", return_value=[]):
+        tab = ClientTab(None)
+
+    mock_sites = [
+        {
+            "name": "Direct Client",
+            "connection_type": "direct",
+            "host": "192.168.1.50",
+            "port": 3240,
+            "secure": False,
+            "password": "",
+        },
+        {
+            "name": "Cloudflare Client",
+            "connection_type": "cloudflared",
+            "cloudflared_hostname": "usbip.maschmeyer.ca",
+            "cloudflared_path": "/opt/cf",
+            "cloudflared_token_id": "tok_id",
+            "cloudflared_token_secret": "tok_sec",
+            "port": 3240,
+            "secure": True,
+            "password": "pass",
+        },
+    ]
+
+    with patch(
+        "usbip_gui.gui.client.load_sites", return_value=mock_sites
+    ), patch(
+        "usbip_gui.gui.client.get_selected_site_name",
+        return_value="Cloudflare Client",
+    ):
+        tab._populate_site_combo()
+        assert tab.remote_site_combo.count() == 3
+        assert tab.remote_site_combo.currentText() == "Cloudflare Client"
+
+    # Test _on_sites_updated
+    with patch.object(tab, "_populate_site_combo") as mock_pop:
+        tab._on_sites_updated("server")
+        mock_pop.assert_not_called()
+        tab._on_sites_updated("client")
+        mock_pop.assert_called_once()
+
+    # Test _on_site_selected with empty site
+    tab.remote_site_combo.setCurrentIndex(0)
+    tab._on_site_selected(0)
+    mock_set.assert_called_with("client", "")
+
+    # Test _on_site_selected with non-existent site
+    tab.remote_site_combo.setCurrentIndex(1)
+    with patch("usbip_gui.gui.client.get_site", return_value=None):
+        tab._on_site_selected(1)
+
+    # Test _on_site_selected with direct site
+    direct_site = mock_sites[0]
+    with patch("usbip_gui.gui.client.get_site", return_value=direct_site):
+        tab._on_site_selected(1)
+        assert tab.remote_ip_input.text() == "192.168.1.50"
+
+    # Test _on_site_selected with cloudflared site
+    cf_site = mock_sites[1]
+    with patch("usbip_gui.gui.client.get_site", return_value=cf_site):
+        tab.remote_site_combo.setCurrentIndex(2)
+        tab._on_site_selected(2)
+        assert tab.remote_ip_input.text() == "usbip.maschmeyer.ca"
+        assert tab.remote_port_input.text() == "3240"
+        assert tab.remote_secure_checkbox.isChecked() is True
+        assert tab.remote_password_input.text() == "pass"
+
+    # Test _get_active_cf_settings
+    with patch("usbip_gui.gui.client.get_site", return_value=cf_site):
+        use_cf, host, path, tok_id, tok_sec = tab._get_active_cf_settings()
+        assert use_cf is True
+        assert host == "usbip.maschmeyer.ca"
+        assert path == "/opt/cf"
+        assert tok_id == "tok_id"
+        assert tok_sec == "tok_sec"
+
+    with patch("usbip_gui.gui.client.get_site", return_value=direct_site):
+        use_cf, host, path, tok_id, tok_sec = tab._get_active_cf_settings()
+        assert use_cf is False
+        assert host == ""
+        assert path == ""
+        assert tok_id == ""
+        assert tok_sec == ""
+
+    # Test connect_site
+    with patch.object(tab, "refresh_remote") as mock_refresh:
+        tab.connect_site()
+        mock_refresh.assert_called_once()
+
+
+@patch("usbip_gui.gui.client.list_attached_usb", return_value=[])
+@patch("usbip_gui.gui.client.list_remote_usb")
+@patch("usbip_gui.gui.client.QMessageBox.critical")
+def test_refresh_remote_cloudflared_validation_and_call(
+    mock_critical: MagicMock,
+    mock_list: MagicMock,
+    _mock_attached: MagicMock,
+):
+    """Test refresh_remote validation and invocation with cloudflared."""
+    tab = MagicMock()
+    tab.remote_ip_input.text.return_value = "default_ip"
+    tab.remote_port_input.text.return_value = "3240"
+    tab.remote_secure_checkbox.isChecked.return_value = False
+    tab.remote_password_input.text.return_value = ""
+
+    # Missing cf hostname
+    tab._get_active_cf_settings.return_value = (True, "", "", "", "")
+    ClientTab.refresh_remote(tab)
+    mock_critical.assert_called_once()
+    mock_list.assert_not_called()
+
+    # Valid cf hostname
+    mock_critical.reset_mock()
+    tab._get_active_cf_settings.return_value = (
+        True,
+        "usbip.maschmeyer.ca",
+        "/cf/path",
+        "tok_id",
+        "tok_sec",
+    )
+    mock_list.return_value = []
+    ClientTab.refresh_remote(tab)
+    mock_critical.assert_not_called()
+    mock_list.assert_called_once_with(
+        "default_ip",
+        3240,
+        False,
+        "",
+        use_cloudflared=True,
+        cloudflared_hostname="usbip.maschmeyer.ca",
+        cloudflared_path="/cf/path",
+        service_token_id="tok_id",
+        service_token_secret="tok_sec",
+    )
+
+
+@patch("usbip_gui.gui.client.time.sleep")
+@patch("usbip_gui.gui.client.attach_remote_usb")
+@patch("usbip_gui.gui.client.QMessageBox.critical")
+def test_attach_remote_cloudflared_validation_and_call(
+    mock_critical: MagicMock,
+    mock_attach: MagicMock,
+    _mock_sleep: MagicMock,
+):
+    """Test attach_remote validation and invocation with cloudflared."""
+    tab = MagicMock()
+    tab.remote_ip_input.text.return_value = "default_ip"
+    tab.remote_port_input.text.return_value = "3240"
+    tab.remote_secure_checkbox.isChecked.return_value = False
+    tab.remote_password_input.text.return_value = ""
+    item = MagicMock()
+    item.text.side_effect = lambda idx: "1-1" if idx == 2 else "Detached"
+    tab.remote_listbox.selectedItems.return_value = [item]
+
+    # Missing cf hostname
+    tab._get_active_cf_settings.return_value = (True, "", "", "", "")
+    ClientTab.attach_remote(tab)
+    mock_critical.assert_called_once()
+    mock_attach.assert_not_called()
+
+    # Valid cf hostname
+    mock_critical.reset_mock()
+    tab._get_active_cf_settings.return_value = (
+        True,
+        "usbip.maschmeyer.ca",
+        "/cf/path",
+        "tok_id",
+        "tok_sec",
+    )
+    mock_attach.return_value = MagicMock(returncode=0)
+    ClientTab.attach_remote(tab)
+    mock_critical.assert_not_called()
+    mock_attach.assert_called_once_with(
+        "default_ip",
+        "1-1",
+        3240,
+        False,
+        "",
+        use_cloudflared=True,
+        cloudflared_hostname="usbip.maschmeyer.ca",
+        cloudflared_path="/cf/path",
+        service_token_id="tok_id",
+        service_token_secret="tok_sec",
+    )

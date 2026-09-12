@@ -1,6 +1,11 @@
 {
     "no selection to bind": "",
     " bound successfully": "",
+    "Site:": "",
+    "Connect": "",
+    "Manual / Default": "",
+    "Tunnel token required for Cloudflare Tunnel server.": "",
+    "Failed to start Cloudflare Tunnel: {}": "",
     "no selection to unbind": "",
     " unbound succesfully": "",
     "Local USB Devices": "",

@@ -18,3 +18,10 @@ if (-not (Get-Command usbip.exe -ErrorAction SilentlyContinue)) {
     Start-Process msiexec.exe -Wait -ArgumentList "/i `"$tempMsi`" /quiet /norestart"
     Remove-Item $tempMsi -ErrorAction SilentlyContinue
 }
+
+# Check and install cloudflared
+if (-not (Get-Command cloudflared.exe -ErrorAction SilentlyContinue) -and -not (winget list --exact --id Cloudflare.cloudflared 2>$null)) {
+    Write-Host "Installing cloudflared..."
+    winget install --id Cloudflare.cloudflared --accept-package-agreements --accept-source-agreements --silent
+}
+

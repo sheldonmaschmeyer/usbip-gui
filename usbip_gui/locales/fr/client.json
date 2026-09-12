@@ -1,6 +1,11 @@
 {
     "no selection to attach": "aucune sélection à attacher",
     "no selection to detach": "aucune sélection à détacher",
+    "Site:": "Site :",
+    "Connect": "Connexion",
+    "Manual / Direct": "Manuel / Direct",
+    "Cloudflare hostname required for Cloudflare Tunnel connection.": "Nom d'hôte Cloudflare requis pour la connexion Tunnel Cloudflare.",
+    "Failed to start Cloudflare Tunnel: {}": "Échec du démarrage du Tunnel Cloudflare : {}",
     "Remote USB Devices for ": "Périphériques USB distants pour ",
     "Attach Device": "Attacher le périphérique",
     "Attached Devices": "Périphériques attachés",

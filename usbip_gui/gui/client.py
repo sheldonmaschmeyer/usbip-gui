@@ -1,5 +1,6 @@
 """Client tab implementation for managing remote USB device connections."""
 
+# pylint: disable=too-many-lines
 import json
 import socket
 import ssl
@@ -28,6 +29,7 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QTreeWidget,
     QMessageBox,
+    QComboBox,
 )
 from usbip_gui.common import SortableTreeWidgetItem, set_min_column_widths
 
@@ -39,6 +41,12 @@ from usbip_gui.common import (
     get_config_dir,
     elevate_command,
     run_elevated,
+    resolve_cloudflared_executable,
+    load_sites,
+    get_site,
+    get_selected_site_name,
+    set_selected_site_name,
+    sites_updated,
 )
 from usbip_gui.common.common import configure_tree_widget_interaction
 from usbip_gui.product_detection import (
@@ -389,10 +397,86 @@ def get_or_create_client_tunnel(
     return "127.0.0.1", local_port
 
 
+def get_or_create_cloudflared_client_tunnel(
+    hostname: str,
+    custom_path: str = "",
+    service_token_id: str = "",
+    service_token_secret: str = "",
+) -> Tuple[str, int]:
+    """Get or create cloudflared access tcp tunnel on the client."""
+    cache_key = (
+        f"{hostname}:{service_token_id}" if service_token_id else hostname
+    )
+    if cache_key in tunnel_state.cloudflared_client_processes:
+        local_port, proc = tunnel_state.cloudflared_client_processes[cache_key]
+        if proc.poll() is None:
+            return "127.0.0.1", local_port
+        tunnel_state.cloudflared_client_processes.pop(cache_key, None)
+
+    cloudflared_exe = resolve_cloudflared_executable(custom_path)
+    local_port = random.randint(40000, 50000)
+
+    cmd = [
+        cloudflared_exe,
+        "access",
+        "tcp",
+        "--hostname",
+        hostname,
+        "--url",
+        f"127.0.0.1:{local_port}",
+    ]
+    if service_token_id and service_token_secret:
+        cmd.extend(
+            [
+                "--service-token-id",
+                service_token_id,
+                "--service-token-secret",
+                service_token_secret,
+            ]
+        )
+
+    # Long-lived child process is intentionally kept for active tunnel reuse.
+    # pylint: disable=consider-using-with
+    proc = subprocess.Popen(cmd)
+    tunnel_state.cloudflared_client_processes[cache_key] = (local_port, proc)
+
+    def watch_cf_tunnel() -> None:
+        proc.wait()
+        current = tunnel_state.cloudflared_client_processes.get(cache_key)
+        if current and current[1] is proc:
+            tunnel_state.cloudflared_client_processes.pop(cache_key, None)
+
+    threading.Thread(target=watch_cf_tunnel, daemon=True).start()
+
+    time.sleep(1)
+    return "127.0.0.1", local_port
+
+
+# pylint: disable=too-many-arguments,too-many-positional-arguments
 def list_remote_usb(
-    server_ip: str, port: int = 3240, secure: bool = False, password: str = ""
+    server_ip: str,
+    port: int = 3240,
+    secure: bool = False,
+    password: str = "",
+    use_cloudflared: bool = False,
+    cloudflared_hostname: str = "",
+    cloudflared_path: str = "",
+    service_token_id: str = "",
+    service_token_secret: str = "",
 ) -> List[Tuple[str, str, str, str]]:
     """List remote usb."""
+    if use_cloudflared:
+        cf_host = cloudflared_hostname or server_ip
+        cf_ip, cf_port = get_or_create_cloudflared_client_tunnel(
+            cf_host,
+            cloudflared_path,
+            service_token_id=service_token_id,
+            service_token_secret=service_token_secret,
+        )
+        if not cf_ip:
+            return []
+        server_ip, port = cf_ip, cf_port
+
     target_ip, target_port = get_or_create_client_tunnel(
         server_ip, port, secure, password
     )
@@ -423,12 +507,18 @@ def list_attached_usb() -> List[Tuple[str, int, str, str, str, str]]:
     return parse_attached_list(result.stdout)
 
 
+# pylint: disable=too-many-arguments,too-many-positional-arguments
 def attach_remote_usb(
     server_ip: str,
     bus_id: str,
     port: int = 3240,
     secure: bool = False,
     password: str = "",
+    use_cloudflared: bool = False,
+    cloudflared_hostname: str = "",
+    cloudflared_path: str = "",
+    service_token_id: str = "",
+    service_token_secret: str = "",
 ):
     """Attach remote usb."""
 
@@ -450,6 +540,20 @@ def attach_remote_usb(
             cmd.append("--busid=" + bus_id)
 
         return run_elevated(cmd)
+
+    if use_cloudflared:
+        cf_host = cloudflared_hostname or server_ip
+        cf_ip, cf_port = get_or_create_cloudflared_client_tunnel(
+            cf_host,
+            cloudflared_path,
+            service_token_id=service_token_id,
+            service_token_secret=service_token_secret,
+        )
+        if not cf_ip:
+            return subprocess.CompletedProcess(
+                args=[], returncode=-1, stdout="", stderr=""
+            )
+        server_ip, port = cf_ip, cf_port
 
     target_ip, target_port = get_or_create_client_tunnel(
         server_ip, port, secure, password
@@ -524,6 +628,17 @@ class ClientTab(QWidget):
 
         # Remote Control Frame
         self.remote_control_layout = QHBoxLayout()
+        self.remote_site_label = QLabel(t("Site:"))
+        self.remote_site_combo = QComboBox()
+        self.remote_site_combo.setMinimumWidth(110)
+        connect_signal(
+            self.remote_site_combo.currentIndexChanged, self._on_site_selected
+        )
+        connect_signal(sites_updated.changed, self._on_sites_updated)
+
+        self.remote_connect_button = QPushButton(t("Connect"))
+        connect_signal(self.remote_connect_button.clicked, self.connect_site)
+
         self.remote_list_label = QLabel(t("Remote USB Devices for "))
         self.remote_ip_input = QLineEdit()
         self.remote_ip_input.setText("127.0.0.1")
@@ -559,6 +674,9 @@ class ClientTab(QWidget):
         self.detach_button.setToolTip(t("attached_detach_tooltip"))
         connect_signal(self.detach_button.clicked, self.detach_remote)
 
+        self.remote_control_layout.addWidget(self.remote_site_label)
+        self.remote_control_layout.addWidget(self.remote_site_combo)
+        self.remote_control_layout.addWidget(self.remote_connect_button)
         self.remote_control_layout.addWidget(self.remote_list_label)
         self.remote_control_layout.addWidget(self.remote_ip_input)
         self.remote_control_layout.addWidget(self.remote_port_input)
@@ -568,6 +686,8 @@ class ClientTab(QWidget):
         self.remote_control_layout.addWidget(self.remote_list_attach_button)
         self.remote_control_layout.addWidget(self.detach_button)
         self.remote_control_layout.addStretch()
+
+        self._populate_site_combo()
 
         # Remote List
         self.remote_listbox = QTreeWidget()
@@ -588,6 +708,86 @@ class ClientTab(QWidget):
         layout.addLayout(self.remote_control_layout)
         layout.addWidget(self.remote_listbox)
 
+    def _populate_site_combo(self) -> None:
+        """Populate the site dropdown with saved client sites."""
+        current_data = self.remote_site_combo.currentData()
+        selected_name = (
+            str(current_data)
+            if current_data
+            else get_selected_site_name("client")
+        )
+        self.remote_site_combo.blockSignals(True)
+        self.remote_site_combo.clear()
+        self.remote_site_combo.addItem(t("Manual / Direct"), "")
+        saved_sites = load_sites("client")
+        selected_idx = 0
+        for idx, site in enumerate(saved_sites, start=1):
+            name = str(site.get("name", ""))
+            self.remote_site_combo.addItem(name, name)
+            if name == selected_name:
+                selected_idx = idx
+        self.remote_site_combo.setCurrentIndex(selected_idx)
+        self.remote_site_combo.blockSignals(False)
+
+    def _on_sites_updated(self, site_type: str) -> None:
+        """Handle site configuration updates."""
+        if site_type == "client":
+            self._populate_site_combo()
+
+    def _on_site_selected(self, _index: int) -> None:
+        """Handle selection change in site dropdown."""
+        site_name = str(self.remote_site_combo.currentData() or "")
+        set_selected_site_name("client", site_name)
+        if not site_name:
+            return
+        site = get_site("client", site_name)
+        if not site:
+            return
+        conn_type = str(site.get("connection_type", "direct"))
+        if conn_type == "cloudflared":
+            self.remote_ip_input.setText(
+                str(site.get("cloudflared_hostname", ""))
+            )
+        else:
+            self.remote_ip_input.setText(str(site.get("host", "127.0.0.1")))
+        self.remote_port_input.setText(str(site.get("port", USBIPD_PORT)))
+        self.remote_secure_checkbox.blockSignals(True)
+        self.remote_secure_checkbox.setChecked(bool(site.get("secure", True)))
+        self.remote_secure_checkbox.blockSignals(False)
+        self.remote_password_input.setText(str(site.get("password", "")))
+
+    def _get_active_cf_settings(
+        self,
+    ) -> Tuple[bool, str, str, str, str]:
+        """Return (use_cf, hostname, path, token_id, token_secret)."""
+        site_name = str(self.remote_site_combo.currentData() or "")
+        if site_name:
+            site = get_site("client", site_name)
+            if site and site.get("connection_type") == "cloudflared":
+                cf_host = str(
+                    site.get("cloudflared_hostname")
+                    or self.remote_ip_input.text()
+                ).strip()
+                cf_path = str(site.get("cloudflared_path") or "").strip()
+                cf_token_id = str(
+                    site.get("cloudflared_token_id") or ""
+                ).strip()
+                cf_token_secret = str(
+                    site.get("cloudflared_token_secret") or ""
+                ).strip()
+                return (
+                    True,
+                    cf_host,
+                    cf_path,
+                    cf_token_id,
+                    cf_token_secret,
+                )
+        return False, "", "", "", ""
+
+    def connect_site(self) -> None:
+        """Connect to the selected site and populate remote devices."""
+        self.refresh_remote()
+
     def check_secure_warning(self, state: int):
         """Check secure warning."""
         if state == 0:
@@ -605,7 +805,39 @@ class ClientTab(QWidget):
         password = self.remote_password_input.text()
 
         try:
-            remote_devices = list_remote_usb(server_ip, port, secure, password)
+            (
+                use_cf,
+                cf_hostname,
+                cf_path,
+                cf_token_id,
+                cf_token_secret,
+            ) = self._get_active_cf_settings()
+        except (ValueError, TypeError):
+            use_cf, cf_hostname, cf_path = False, "", ""
+            cf_token_id, cf_token_secret = "", ""
+        if use_cf and not cf_hostname:
+            QMessageBox.critical(
+                self,
+                t("Error"),
+                t(
+                    "Cloudflare hostname required for Cloudflare "
+                    "Tunnel connection."
+                ),
+            )
+            return
+
+        try:
+            remote_devices = list_remote_usb(
+                server_ip,
+                port,
+                secure,
+                password,
+                use_cloudflared=use_cf,
+                cloudflared_hostname=cf_hostname,
+                cloudflared_path=cf_path,
+                service_token_id=cf_token_id,
+                service_token_secret=cf_token_secret,
+            )
             attached_devices = list_attached_usb()
         except OSError as e:
             QMessageBox.critical(
@@ -624,8 +856,11 @@ class ClientTab(QWidget):
                 att = attached_by_busid.pop(r_bus_id)
                 local_port = att[1]
 
+            display_ip = (
+                cf_hostname if use_cf and cf_hostname else server_ip
+            )
             item_data = [
-                server_ip,
+                display_ip,
                 str(port),
                 r_bus_id,
                 status,
@@ -720,7 +955,40 @@ class ClientTab(QWidget):
         password = self.remote_password_input.text()
         bus_id = selection[0].text(2)
 
-        result = attach_remote_usb(server_ip, bus_id, port, secure, password)
+        try:
+            (
+                use_cf,
+                cf_hostname,
+                cf_path,
+                cf_token_id,
+                cf_token_secret,
+            ) = self._get_active_cf_settings()
+        except (ValueError, TypeError):
+            use_cf, cf_hostname, cf_path = False, "", ""
+            cf_token_id, cf_token_secret = "", ""
+        if use_cf and not cf_hostname:
+            QMessageBox.critical(
+                self,
+                t("Error"),
+                t(
+                    "Cloudflare hostname required for Cloudflare "
+                    "Tunnel connection."
+                ),
+            )
+            return
+
+        result = attach_remote_usb(
+            server_ip,
+            bus_id,
+            port,
+            secure,
+            password,
+            use_cloudflared=use_cf,
+            cloudflared_hostname=cf_hostname,
+            cloudflared_path=cf_path,
+            service_token_id=cf_token_id,
+            service_token_secret=cf_token_secret,
+        )
         return_code = getattr(result, "returncode", 0)
         if isinstance(return_code, int) and return_code != 0:
             stderr = getattr(result, "stderr", "")
