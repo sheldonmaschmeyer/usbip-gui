@@ -27,6 +27,12 @@ RUN apt-get update && apt-get install -y \
     fonts-ubuntu \
     && rm -rf /var/lib/apt/lists/*
 
+# Install cloudflared via Cloudflare's official apt repository
+RUN mkdir -p --mode=0755 /etc/apt/keyrings && \
+    wget -qO /etc/apt/keyrings/cloudflare-main.gpg https://pkg.cloudflare.com/cloudflare-main.gpg && \
+    echo 'deb [signed-by=/etc/apt/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared noble main' > /etc/apt/sources.list.d/cloudflared.list && \
+    apt-get update && apt-get install -y cloudflared && rm -rf /var/lib/apt/lists/*
+
 # Set locale for zsh agnoster theme characters
 RUN locale-gen en_US.UTF-8
 ENV LANG=en_US.UTF-8

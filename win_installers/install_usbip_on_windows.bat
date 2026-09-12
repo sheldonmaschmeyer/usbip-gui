@@ -99,6 +99,21 @@ if defined PYTHON_DIR (
     set "PATH=%PYTHON_DIR%;%PATH%"
 )
 
+echo.
+echo [2.3/4] Checking Cloudflare Tunnel (cloudflared)...
+where cloudflared.exe >nul 2>&1
+if %errorLevel% NEQ 0 (
+    echo Installing cloudflared...
+    winget install --id Cloudflare.cloudflared --accept-package-agreements --accept-source-agreements --silent
+    if %errorLevel% NEQ 0 (
+        echo [WARNING] cloudflared installation failed. You can install it manually from Cloudflare if needed.
+    ) else (
+        echo [OK] cloudflared installed.
+    )
+) else (
+    echo [OK] cloudflared is already installed.
+)
+
 :: Install app dependencies
 :: (this also installs the project's own OpenSSL, used for Secure/SSL
 :: tunnel mode, so no host-wide OpenSSL install is needed)

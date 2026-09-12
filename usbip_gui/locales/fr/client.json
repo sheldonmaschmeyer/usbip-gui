@@ -1,6 +1,11 @@
 {
     "no selection to attach": "aucune sélection à attacher",
     "no selection to detach": "aucune sélection à détacher",
+    "Site:": "Site :",
+    "Connect": "Connexion",
+    "Manual / Direct": "Manuel / Direct",
+    "Cloudflare hostname required for Cloudflare Tunnel connection.": "Nom d'hôte Cloudflare requis pour la connexion Tunnel Cloudflare.",
+    "Failed to start Cloudflare Tunnel: {}": "Échec du démarrage du Tunnel Cloudflare : {}",
     "Remote USB Devices for ": "Périphériques USB distants pour ",
     "Attach Device": "Attacher le périphérique",
     "Attached Devices": "Périphériques attachés",
@@ -13,5 +18,7 @@
     "auth_failed_msg": "Échec de l'authentification. Veuillez vérifier votre mot de passe.",
     "Attached": "Attaché",
     "Detached": "Détaché",
-    "usbip_client_missing_msg": "Impossible d'exécuter l'outil client usbip : {}\n\nAssurez-vous qu'il est installé et disponible dans votre PATH."
+    "usbip_client_missing_msg": "Impossible d'exécuter l'outil client usbip : {}\n\nAssurez-vous qu'il est installé et disponible dans votre PATH.",
+    "Show": "Afficher",
+    "show_password_tooltip": "Afficher ou masquer le mot de passe"
 }

@@ -58,6 +58,7 @@ Name: "server"; Description: "USBIP Server Driver (usbipd-win)"; Types: full cus
 Name: "client"; Description: "USBIP Client Driver (usbip-win2)"; Types: full custom
 Name: "python"; Description: "Python 3 Runtime"; Types: full custom
 Name: "pixi"; Description: "Pixi Package Manager"; Types: full custom
+Name: "cloudflared"; Description: "Cloudflare Tunnel (cloudflared)"; Types: full custom
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
@@ -109,6 +110,9 @@ Filename: "winget"; Parameters: "install --id Python.Python.3 --accept-package-a
 
 ; Install Pixi
 Filename: "winget"; Parameters: "install --id prefix-dev.pixi --accept-source-agreements --accept-package-agreements --silent"; Components: pixi; Flags: waituntilterminated runhidden; StatusMsg: "Installing Pixi Package Manager..."
+
+; Install Cloudflared
+Filename: "winget"; Parameters: "install --id Cloudflare.cloudflared --accept-package-agreements --accept-source-agreements --silent"; Components: cloudflared; Flags: waituntilterminated runhidden; StatusMsg: "Installing Cloudflare Tunnel (cloudflared)..."
 
 ; Install App Dependencies
 ; Runs as the original un-elevated user to ensure pixi installs local packages correctly
@@ -179,6 +183,13 @@ begin
     begin
       if ResultCode = 0 then
         WizardForm.ComponentsList.Checked[4] := False; // Pixi installed, uncheck
+    end;
+
+    // Check if cloudflared is installed
+    if Exec('cmd.exe', '/c where cloudflared.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    begin
+      if ResultCode = 0 then
+        WizardForm.ComponentsList.Checked[5] := False; // Cloudflared installed, uncheck
     end;
   end;
 end;

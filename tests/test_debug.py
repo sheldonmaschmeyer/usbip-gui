@@ -1,6 +1,7 @@
 """Tests for the debug menu components."""
 
 import sys
+from typing import TextIO, cast
 from unittest.mock import MagicMock, patch, mock_open
 
 import pytest
@@ -71,8 +72,6 @@ def test_stream_interceptor_isatty():
     # Stream without isatty
     class DummyStream:
         """A dummy stream without isatty."""
-
-    from typing import cast, TextIO
 
     assert StreamInterceptor(cast(TextIO, DummyStream())).isatty() is False
 

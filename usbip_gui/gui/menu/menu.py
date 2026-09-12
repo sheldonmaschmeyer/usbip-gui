@@ -7,6 +7,7 @@ from PyQt6.QtGui import QAction, QActionGroup
 from usbip_gui.typings import connect_signal, add_action
 from usbip_gui.common import get_translator
 from .about import show_about_dialog
+from .site_config import show_site_config_dialog
 from .language_switcher import toggle_language
 from .debug import show_debug_window
 
@@ -24,6 +25,13 @@ def create_main_menu(app: "UsbIpGui"):
     # File Menu
     file_menu = menubar.addMenu(t("File"))
     assert file_menu is not None
+
+    site_config_action = QAction(t("Site Config"), app.root)
+    connect_signal(
+        site_config_action.triggered,
+        lambda: show_site_config_dialog(app.root),
+    )
+    add_action(file_menu, site_config_action)
 
     about_action = QAction(t("About"), app.root)
     connect_signal(about_action.triggered, lambda: show_about_dialog(app.root))

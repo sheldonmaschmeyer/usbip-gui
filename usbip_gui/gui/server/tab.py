@@ -1,10 +1,7 @@
-"""Server tab implementation for exposing local USB devices."""
+"""Server tab UI and interactions."""
 
 import os
-import re
-import subprocess
 import sys
-import threading
 import time
 from typing import List, Tuple
 
@@ -18,234 +15,47 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QTreeWidget,
     QMessageBox,
+    QComboBox,
 )
 
 from usbip_gui.typings import connect_signal, set_header_labels
 from usbip_gui.common import (
     get_translator,
     USBIPD_PORT,
-    tunnel_state,
     SortableTreeWidgetItem,
     set_min_column_widths,
-    elevate_command,
-    run_elevated,
+    load_sites,
+    get_site,
+    get_selected_site_name,
+    set_selected_site_name,
+    site_requires_unlock,
+    sites_updated,
 )
 from usbip_gui.common.common import configure_tree_widget_interaction
+from usbip_gui.gui.dialogs import ensure_unlocked
 from usbip_gui.product_detection import (
     ItemUpdater,
     enrich_device_item,
-    extract_unknown_product_suffix,
     is_unknown_product,
 )
-from .. import ssl_tunnel
+from ... import ssl_tunnel
+from .parsing import (
+    bind_local_usb,
+    list_local_usb,
+    local_device_columns,
+    unbind_local_usb,
+)
+from .runtime import init_usbip_server
 
 t = get_translator("server")
 
 
-def local_device_columns() -> List[str]:
-    """Column headers for the local device tree, for the active language."""
-    # pylint: disable=duplicate-code
-    cols = [
-        t("Bus ID"),
-        t("State"),
-        t("Manufacturer"),
-        t("Description"),
-        t("VID : PID"),
-    ]
-    if sys.platform == "win32":
-        cols.insert(4, t("Windows Driver"))
-    return cols
-
-
-def init_usbip_server(
-    port: int = 3240,
-    secure: bool = False,
-    password: str = "",
-    bind_host: str = "0.0.0.0",
-):
-    """Init usbip server."""
-    if sys.platform != "win32":
-        subprocess.run(elevate_command(["pkill", "usbipd"]), check=False)
-        subprocess.run(["pkill", "-f", "ssl_tunnel.py server"], check=False)
-    if tunnel_state.server_process:
-        try:
-            tunnel_state.server_process.terminate()
-            tunnel_state.server_process.wait()
-        except OSError:
-            pass
-        tunnel_state.server_process = None
-
-    if secure:
-        if sys.platform != "win32":
-            target_port = port + 10000
-            listen_port = port
-            subprocess.run(
-                elevate_command(
-                    ["usbipd", "-D", "--tcp-port", str(target_port)]
-                ),
-                check=False,
-            )
-        else:
-            target_port = 3240
-            listen_port = 3241 if port == 3240 else port
-
-        def run_tunnel():
-            with subprocess.Popen(
-                [
-                    sys.executable,
-                    os.path.join(
-                        os.path.dirname(os.path.dirname(__file__)),
-                        "ssl_tunnel.py",
-                    ),
-                    "server",
-                    "--listen-port",
-                    str(listen_port),
-                    "--target-port",
-                    str(target_port),
-                    "--bind-host",
-                    bind_host,
-                    "--password",
-                    password,
-                ]
-            ) as process:
-                tunnel_state.server_process = process
-                process.wait()
-
-        threading.Thread(target=run_tunnel, daemon=True).start()
-    else:
-        if sys.platform != "win32":
-            subprocess.run(
-                elevate_command(["usbipd", "-D", "--tcp-port", str(port)]),
-                check=False,
-            )
-
-
-def parse_local_list(text: str) -> List[Tuple[str, str, str, str, str]]:
-    """Parse local list."""
-    if not text or not text.strip():
-        return []
-
-    rows: List[Tuple[str, str, str, str, str]] = []
-    devices = text.strip().split("\n\n")
-    for device in devices:
-        lines = device.strip().split("\n")
-        if len(lines) < 2:
-            continue
-        bus_info = lines[0].split(" ")
-        man_info = lines[1].split(":")
-
-        bus_id = bus_info[2] if len(bus_info) > 2 else ""
-        vid_pid = ""
-        vid_match = re.search(r"\(([^)]+)\)", lines[0])
-        if vid_match:
-            vid_pid = vid_match.group(1)
-
-        manufacturer = man_info[0].strip() if len(man_info) > 0 else ""
-        description = (
-            ":".join(man_info[1:]).strip() if len(man_info) > 1 else ""
-        )
-
-        # Strip the redundant suffix if it's in the description
-        suffix_match = extract_unknown_product_suffix(description)
-        if suffix_match:
-            description = description[: -len(suffix_match)].strip()
-
-        state = t("Unbound")
-        if bus_id:
-            driver_path = f"/sys/bus/usb/devices/{bus_id}/driver"
-            if os.path.exists(driver_path) and os.path.islink(driver_path):
-                driver = os.path.basename(os.readlink(driver_path))
-                if driver == "usbip-host":
-                    state = t("Bound")
-
-        rows.append((bus_id, state, manufacturer, description, vid_pid))
-    return rows
-
-
-def parse_windows_local_list(
-    text: str,
-) -> List[Tuple[str, str, str, str, str]]:
-    """Parse windows local list."""
-    if not text or not text.strip():
-        return []
-
-    rows: List[Tuple[str, str, str, str, str]] = []
-    for line in text.strip().split("\n"):
-        match = re.match(
-            r"^(\d+-\d+(?:\.\d+)*)\s+"
-            r"([0-9a-fA-F]{4}:[0-9a-fA-F]{4})\s+"
-            r"(.+?)\s{2,}(Not shared|Shared|Attached.*)$",
-            line.strip(),
-        )
-        if match:
-            bus_id, vid_pid, device, state = match.groups()
-            gui_state = (
-                t("Bound")
-                if "Shared" in state or "Attached" in state
-                else t("Unbound")
-            )
-            rows.append((bus_id, gui_state, "", device, vid_pid))
-    return rows
-
-
-def list_local_usb() -> List[Tuple[str, str, str, str, str]]:
-    """List local usb."""
-    if sys.platform == "win32":
-        result = subprocess.run(
-            ["usbipd", "list"], capture_output=True, text=True, check=False
-        )
-        return parse_windows_local_list(result.stdout)
-
-    result = run_elevated(["usbip", "list", "--local"])
-    return parse_local_list(result.stdout)
-
-
-def bind_local_usb(bus_id: str):
-    """Bind local usb."""
-    if sys.platform == "win32":
-        cmd = ["usbipd", "bind", "--busid", bus_id]
-    else:
-        cmd = ["usbip", "bind", "--busid=" + bus_id]
-
-    print(f"DEBUG: Executing elevated command: {' '.join(cmd)}", flush=True)
-    result = run_elevated(cmd)
-    if result.stdout:
-        print(f"stdout: {result.stdout}", flush=True)
-    if result.stderr:
-        print(f"stderr: {result.stderr}", flush=True)
-    print(
-        f"DEBUG: Command finished with exit code {result.returncode}",
-        flush=True,
-    )
-    return result
-
-
-def unbind_local_usb(bus_id: str):
-    """Unbind local usb."""
-    if sys.platform == "win32":
-        cmd = ["usbipd", "unbind", "--busid", bus_id]
-    else:
-        cmd = ["usbip", "unbind", "--busid=" + bus_id]
-
-    print(f"DEBUG: Executing elevated command: {' '.join(cmd)}", flush=True)
-    result = run_elevated(cmd)
-    if result.stdout:
-        print(f"stdout: {result.stdout}", flush=True)
-    if result.stderr:
-        print(f"stderr: {result.stderr}", flush=True)
-    print(
-        f"DEBUG: Command finished with exit code {result.returncode}",
-        flush=True,
-    )
-    return result
-
-
 class ServerTab(QWidget):
-    """Servertab."""
+    """Server tab implementation for exposing local USB devices."""
 
     def __init__(self, parent: QWidget | None = None):
         """Initialize the class instance."""
-        # pylint: disable=duplicate-code
+        # pylint: disable=duplicate-code,too-many-statements
         super().__init__(parent)
 
         self._item_updater = ItemUpdater(self)
@@ -257,6 +67,17 @@ class ServerTab(QWidget):
 
         # Control Frame 1 (top row)
         self.local_control_layout1 = QHBoxLayout()
+        self.local_site_label = QLabel(t("Site:"))
+        self.local_site_combo = QComboBox()
+        self.local_site_combo.setMinimumWidth(110)
+        connect_signal(
+            self.local_site_combo.currentIndexChanged, self.on_site_selected
+        )
+        connect_signal(sites_updated.changed, self.on_sites_updated)
+
+        self.local_connect_button = QPushButton(t("Connect"))
+        connect_signal(self.local_connect_button.clicked, self.restart_server)
+
         self.local_list_label = QLabel(t("Local USB Devices"))
         self.local_port_label = QLabel(t("Port "))
         self.local_port_input = QLineEdit()
@@ -276,7 +97,16 @@ class ServerTab(QWidget):
 
         self.local_password_input = QLineEdit()
         self.local_password_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self.local_password_input.setFixedWidth(150)
+        self.local_password_input.setFixedWidth(180)
+
+        self.local_show_password_checkbox = QCheckBox(t("Show"))
+        self.local_show_password_checkbox.setToolTip(
+            t("show_password_tooltip")
+        )
+        connect_signal(
+            self.local_show_password_checkbox.stateChanged,
+            self.toggle_show_password,
+        )
 
         self.local_server_restart_button = QPushButton(t("apply_port_restart"))
         self.local_server_restart_button.setToolTip(t("local_restart_tooltip"))
@@ -297,6 +127,9 @@ class ServerTab(QWidget):
             self.local_regen_cert_button.clicked, self.regenerate_cert
         )
 
+        self.local_control_layout1.addWidget(self.local_site_label)
+        self.local_control_layout1.addWidget(self.local_site_combo)
+        self.local_control_layout1.addWidget(self.local_connect_button)
         self.local_control_layout1.addWidget(self.local_list_label)
         self.local_control_layout1.addWidget(self.local_port_label)
         self.local_control_layout1.addWidget(self.local_port_input)
@@ -304,15 +137,17 @@ class ServerTab(QWidget):
         self.local_control_layout1.addWidget(self.local_bind_ip_input)
         self.local_control_layout1.addWidget(self.local_secure_checkbox)
         self.local_control_layout1.addWidget(self.local_password_input)
-        self.local_control_layout1.addWidget(self.local_server_restart_button)
-        self.local_control_layout1.addWidget(
-            self.local_show_fingerprint_button
-        )
-        self.local_control_layout1.addWidget(self.local_regen_cert_button)
+        self.local_control_layout1.addWidget(self.local_show_password_checkbox)
         self.local_control_layout1.addStretch()
+
+        self.populate_site_combo()
 
         # Control Frame 2 (actions)
         self.local_actions_layout = QHBoxLayout()
+        self.local_actions_layout.addWidget(self.local_server_restart_button)
+        self.local_actions_layout.addWidget(self.local_show_fingerprint_button)
+        self.local_actions_layout.addWidget(self.local_regen_cert_button)
+
         self.local_list_refresh_button = QPushButton(t("Refresh"))
         self.local_list_refresh_button.setToolTip(t("local_refresh_tooltip"))
         connect_signal(
@@ -359,6 +194,13 @@ class ServerTab(QWidget):
         """Check secure warning."""
         if state == 0:
             QMessageBox.warning(self, t("Warning"), t("insecure_warning_msg"))
+
+    def toggle_show_password(self, _state: int = 0) -> None:
+        """Toggle local password visibility between masked and plain text."""
+        if self.local_show_password_checkbox.isChecked():
+            self.local_password_input.setEchoMode(QLineEdit.EchoMode.Normal)
+        else:
+            self.local_password_input.setEchoMode(QLineEdit.EchoMode.Password)
 
     def show_fingerprint(self):
         """Show fingerprint."""
@@ -419,8 +261,77 @@ class ServerTab(QWidget):
         for i in range(len(local_device_columns())):
             self.local_listbox.resizeColumnToContents(i)
 
+    def populate_site_combo(self) -> None:
+        """Populate the site dropdown with saved server sites."""
+        saved_sites = load_sites("server")
+        saved_names = {str(site.get("name", "")) for site in saved_sites}
+        current_data = self.local_site_combo.currentData()
+        if current_data and str(current_data) in saved_names:
+            selected_name = str(current_data)
+        else:
+            selected_name = get_selected_site_name("server")
+        self.local_site_combo.blockSignals(True)
+        self.local_site_combo.clear()
+        self.local_site_combo.addItem(t("Manual / Default"), "")
+        selected_idx = 0
+        for idx, site in enumerate(saved_sites, start=1):
+            name = str(site.get("name", ""))
+            self.local_site_combo.addItem(name, name)
+            if name == selected_name:
+                selected_idx = idx
+        self.local_site_combo.setCurrentIndex(selected_idx)
+        self.local_site_combo.blockSignals(False)
+
+    def on_sites_updated(self, site_type: str) -> None:
+        """Handle site configuration updates."""
+        if site_type == "server":
+            self.populate_site_combo()
+
+    def on_site_selected(self, _index: int) -> None:
+        """Handle selection change in site dropdown."""
+        site_name = str(self.local_site_combo.currentData() or "")
+        set_selected_site_name("server", site_name)
+        if not site_name:
+            return
+        site = get_site("server", site_name)
+        if not site:
+            return
+        self.local_port_input.setText(str(site.get("port", USBIPD_PORT)))
+        self.local_bind_ip_input.setText(str(site.get("bind_ip", "0.0.0.0")))
+        self.local_secure_checkbox.blockSignals(True)
+        self.local_secure_checkbox.setChecked(bool(site.get("secure", True)))
+        self.local_secure_checkbox.blockSignals(False)
+        pwd_val = site.get("password", "")
+        self.local_password_input.setText(
+            str(pwd_val) if isinstance(pwd_val, str) else ""
+        )
+
+    def get_active_cf_settings(self) -> Tuple[bool, str, str]:
+        """Return (use_cf, cf_token, cf_path) based on active site."""
+        site_name = str(self.local_site_combo.currentData() or "")
+        if site_name:
+            site = get_site("server", site_name)
+            if site and site.get("connection_type") == "cloudflared":
+                token_val = site.get("cloudflared_token")
+                token = (
+                    str(token_val).strip()
+                    if isinstance(token_val, str)
+                    else ""
+                )
+                cf_path = str(site.get("cloudflared_path") or "").strip()
+                return True, token, cf_path
+        return False, "", ""
+
     def restart_server(self):
         """Restart server."""
+        site_name = str(self.local_site_combo.currentData() or "")
+        if site_name:
+            site = get_site("server", site_name)
+            if site_requires_unlock(site):
+                if not ensure_unlocked(self):
+                    return
+                self.on_site_selected(self.local_site_combo.currentIndex())
+
         try:
             port = int(self.local_port_input.text())
         except ValueError:
@@ -434,7 +345,31 @@ class ServerTab(QWidget):
             )
             return
         bind_host = self.local_bind_ip_input.text().strip() or "0.0.0.0"
-        init_usbip_server(port, secure, password, bind_host)
+
+        try:
+            use_cf, cf_token, cf_path = self.get_active_cf_settings()
+        except (ValueError, TypeError):
+            use_cf, cf_token, cf_path = False, "", ""
+        if use_cf and not cf_token:
+            QMessageBox.critical(
+                self,
+                t("Error"),
+                t("Tunnel token required for Cloudflare Tunnel server."),
+            )
+            return
+
+        if use_cf:
+            init_usbip_server(
+                port,
+                secure,
+                password,
+                bind_host,
+                use_cloudflared=True,
+                cloudflared_token=cf_token,
+                cloudflared_path=cf_path,
+            )
+        else:
+            init_usbip_server(port, secure, password, bind_host)
 
     def bind_local(self):
         """Bind local."""

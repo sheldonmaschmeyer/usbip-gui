@@ -6,6 +6,11 @@
   - [Secure Connection (SSL Tunneling)](#secure-connection-ssl-tunneling)
     - [How it works](#how-it-works)
     - [Connecting over the Internet](#connecting-over-the-internet)
+    - [Cloudflare Tunnel (Service Tokens)](#cloudflare-tunnel-service-tokens)
+      - [Cloudflare Zero Trust setup](#cloudflare-zero-trust-setup)
+      - [Server-side setup (Host machine)](#server-side-setup-host-machine)
+      - [Client-side setup](#client-side-setup)
+      - [Using usbip-gui with the local Cloudflare proxy](#using-usbip-gui-with-the-local-cloudflare-proxy)
   - [Windows Setup](#windows-setup)
     - [Method 1: The Installer Wizard (Recommended for End-Users)](#method-1-the-installer-wizard-recommended-for-end-users)
     - [Method 2: The Developer Script (`.bat`)](#method-2-the-developer-script-bat)
@@ -115,6 +120,67 @@ To securely share a USB device across the internet:
     server.
 5. Click **Refresh Remote** or **Attach** to seamlessly connect over the
    encrypted tunnel!
+
+### Cloudflare Tunnel (Service Tokens)
+
+If you do not want to expose port `3240` directly on your router, you can
+publish USB/IP through Cloudflare Zero Trust using a Cloudflare Tunnel and
+Service Tokens.
+
+This section uses `usbip.maschmeyer.ca` as the example hostname.
+
+#### Cloudflare Zero Trust setup
+
+1. Open **Cloudflare Dashboard -> Zero Trust -> Access -> Applications**.
+2. Click **Add an application** and choose **Self-hosted**.
+3. Configure:
+   - **Application domain:** `usbip.maschmeyer.ca`
+   - **Type:** TCP
+4. Create the Service Token first in **Zero Trust -> Access Controls -> Service
+   Credentials -> Generate Service Token and save:
+   - `Client ID`
+   - `Client Secret`
+5. In Access policies, create a **Service Auth** policy. Under **Include ->
+   Service Token**, select the specific Service Token you just created. The
+   policy will fail with `include field should not be empty` if the token type
+   is chosen but no token is selected in the dropdown.' Session Duration should
+   be up-to 1 week; assuming it might be used for file transferring.
+
+#### Server-side setup (Host machine)
+
+1. Install and register `cloudflared` on the Linux host running USB/IP.
+2. In Cloudflare Dashboard, open **Zero Trust -> Networks -> Tunnels** and
+   create a tunnel named **usbip-manager**.
+3. Add a **Public Hostname** to that tunnel with:
+   - **Hostname:** `usbip.maschmeyer.ca`
+   - **Service Type:** TCP
+   - **URL:** `localhost:3240`
+4. Confirm the connector is healthy/online in the tunnel status page.
+5. Keep your USB/IP server running in secure mode from the GUI.
+
+#### Client-side setup
+
+On the client machine, run a local `cloudflared` Access TCP proxy that:
+1. Uses the Service Token `Client ID` and `Client Secret` you created above.
+2. Connects to hostname `usbip.maschmeyer.ca`.
+3. Exposes a local endpoint on `localhost:13340`.
+
+Keep that local proxy process running while you use USB/IP Manager.
+
+#### Using usbip-gui with the local Cloudflare proxy
+
+1. In the USB/IP Manager **Client** tab, set:
+   - **Host:** `127.0.0.1`
+   - **Port:** `13340`
+2. Enable **Secure** and use the same pre-shared password as the server.
+3. Click **Refresh Remote** or **Attach**.
+
+Traffic flow becomes:
+
+`usbip-gui -> localhost:13340 -> cloudflared -> usbip.maschmeyer.ca -> cloudflared (server) -> localhost:3240`
+
+You now get Cloudflare Access control (Service Tokens) without exposing
+`3240` directly to the internet.
 
 ## Windows Setup
 
