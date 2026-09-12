@@ -1,7 +1,5 @@
 """Tests for the server tab."""
 
-# pylint: disable=protected-access
-
 import sys
 from typing import Callable
 from unittest.mock import MagicMock, patch

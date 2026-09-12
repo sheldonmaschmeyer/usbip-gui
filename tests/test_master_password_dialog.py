@@ -1,7 +1,5 @@
 """Unit tests for master password dialogs."""
 
-# pylint: disable=protected-access
-
 from unittest.mock import patch
 from PyQt6.QtWidgets import QDialog, QMessageBox
 from usbip_gui.gui.dialogs.master_password import (

@@ -1,6 +1,6 @@
 """Tests for the client tab."""
 
-# pylint: disable=duplicate-code, too-many-lines, protected-access
+# pylint: disable=duplicate-code, too-many-lines
 
 import subprocess
 import sys
